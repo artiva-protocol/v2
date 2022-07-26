@@ -1,14 +1,30 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.13;
 
 import {Ownable} from "openzeppelin/contracts/access/Ownable.sol";
+import {IObservability} from "../observability/interface/IObservability.sol";
 
 contract Platform is Ownable {
 
+    /// @notice Version.
+    uint8 public immutable VERSION = 1;
+
+    /// @notice Address for Mirror's observability contract.
+    address public immutable o11y;
+
+    /// @notice Address that deploys and initializes clones.
     address public factory;
+
+    /// @notice Digest of the platform metadata content
     bytes32 public platformMetadataDigest;
+
+    /// @notice List of publishers that can add to the _contentDigests collection
     mapping(address => bool) public allowedPublishers;
-    mapping(uint256 => address) public contentSetIdToOwner;
+
+    /// @notice Content owner lookup that enables owners to edit their own collections
+    mapping(uint256 => address) public contentCollectionIdToOwner;
+
+    /// @notice List of metadata managers that can set the plaform metadata digest
     mapping(address => bool) public allowedMetadataManagers;
 
     bytes32[][] private _contentDigests;
@@ -23,27 +39,37 @@ contract Platform is Ownable {
         _;
     }
 
-    modifier onlyContentSetOwnerOrOwner(uint256 _contentSetId) {
-        require(msg.sender == contentSetIdToOwner[_contentSetId] || msg.sender == owner(), "NOT_CONTENT_OWNER_OR_PLATFORM_OWNER");
+    modifier onlyContentCollectionOwnerOrOwner(uint256 _contentCollectionId) {
+        require(msg.sender == contentCollectionIdToOwner[_contentCollectionId] || msg.sender == owner(), "NOT_CONTENT_OWNER_OR_PLATFORM_OWNER");
         _;
     }
 
-    modifier onlyExistingContentSetId(uint256 _contentSetId) {
-        require(_contentDigests.length > _contentSetId, "CONTENT_SET_ID_DOES_NOT_EXIST");
+    modifier onlyExistingContentCollectionId(uint256 _contentCollectionId) {
+        require(_contentDigests.length > _contentCollectionId, "CONTENT_SET_ID_DOES_NOT_EXIST");
         _;
     }
 
-    modifier onlyExistingContentSetIdAndIndex(uint256 _contentSetId, uint256 _contentIndex) {
-        require(_contentDigests.length > _contentSetId, "CONTENT_SET_ID_DOES_NOT_EXIST");
-        require(_contentDigests[_contentSetId].length >= _contentIndex, "CONTENT_INDEX_DOES_NOT_EXIST");
+    modifier onlyExistingContentCollectionIdAndIndex(uint256 _contentCollectionId, uint256 _contentIndex) {
+        require(_contentDigests.length > _contentCollectionId, "CONTENT_SET_ID_DOES_NOT_EXIST");
+        require(_contentDigests[_contentCollectionId].length >= _contentIndex, "CONTENT_INDEX_DOES_NOT_EXIST");
         _;
     }
 
     /// > [[[[[[[[[[[ Constructor ]]]]]]]]]]]
 
-    constructor(address _factory) {
+    constructor(address _factory, address _o11y) {
+        // Assert not the zero-address.
         require(_factory != address(0), "MUST_SET_FACTORY");
+
+        // Store factory.
         factory = _factory;
+
+         // Assert not the zero-address.
+        require(_o11y != address(0), "must set observability");
+
+        // Store observability.
+        o11y = _o11y;
+
         transferOwnership(_factory);
     }
 
@@ -56,27 +82,32 @@ contract Platform is Ownable {
 
     /// > [[[[[[[[[[[ Content Methods ]]]]]]]]]]]
 
-    function addContentSet(bytes32[] memory _contentSet) external onlyPublisherOrOwner returns(uint256) {
-        uint256 contentSetId = _contentDigests.length;
-        _addContentSet(_contentSet);
-        contentSetIdToOwner[contentSetId] = msg.sender;
-        return (contentSetId);
+    function addContentCollection(bytes32[] memory _contentCollection) external onlyPublisherOrOwner returns(uint256) {
+        uint256 contentCollectionId = _contentDigests.length;
+        _addContentCollection(_contentCollection);
+        contentCollectionIdToOwner[contentCollectionId] = msg.sender;
+        IObservability(o11y).emitContentCollectionSet(contentCollectionId, _contentCollection);
+        return (contentCollectionId);
     }
 
-    function setContentSet(uint256 _contentSetId, bytes32[] memory _contentSet) external onlyContentSetOwnerOrOwner(_contentSetId) onlyExistingContentSetId(_contentSetId) {
-        _setContentSet(_contentSetId, _contentSet);
+    function setContentCollection(uint256 _contentCollectionId, bytes32[] memory _contentCollection) external onlyContentCollectionOwnerOrOwner(_contentCollectionId) onlyExistingContentCollectionId(_contentCollectionId) {
+        _setContentCollection(_contentCollectionId, _contentCollection);
+        IObservability(o11y).emitContentCollectionSet(_contentCollectionId, _contentCollection);
     }
 
-    function setContentDigest(uint256 _contentSetId, uint256 _contentIndex, bytes32 _digest) external onlyContentSetOwnerOrOwner(_contentSetId) onlyExistingContentSetIdAndIndex(_contentSetId, _contentIndex) {
-        _setContentDigest(_contentSetId, _contentIndex, _digest);
+    function setContentDigest(uint256 _contentCollectionId, uint256 _contentIndex, bytes32 _digest) external onlyContentCollectionOwnerOrOwner(_contentCollectionId) onlyExistingContentCollectionIdAndIndex(_contentCollectionId, _contentIndex) {
+        _setContentDigest(_contentCollectionId, _contentIndex, _digest);
+        IObservability(o11y).emitContentDigestSet(_contentCollectionId, _contentIndex, _digest);
     }
 
-    function deleteContentSet(uint256 _contentSetId) external onlyContentSetOwnerOrOwner(_contentSetId) onlyExistingContentSetId(_contentSetId) {
-        _deleteContentSet(_contentSetId);
+    function deleteContentCollection(uint256 _contentCollectionId) external onlyContentCollectionOwnerOrOwner(_contentCollectionId) onlyExistingContentCollectionId(_contentCollectionId) {
+        _deleteContentCollection(_contentCollectionId);
+        IObservability(o11y).emitContentCollectionDeleted(_contentCollectionId);
     }
 
-    function deleteContentDigest(uint256 _contentSetId, uint256 _contentIndex) external onlyContentSetOwnerOrOwner(_contentSetId) onlyExistingContentSetIdAndIndex(_contentSetId, _contentIndex) {
-        _deleteContentDigest(_contentSetId, _contentIndex);
+    function deleteContentDigest(uint256 _contentCollectionId, uint256 _contentIndex) external onlyContentCollectionOwnerOrOwner(_contentCollectionId) onlyExistingContentCollectionIdAndIndex(_contentCollectionId, _contentIndex) {
+        _deleteContentDigest(_contentCollectionId, _contentIndex);
+        IObservability(o11y).emitContentDigestDeleted(_contentCollectionId, _contentIndex);
     }
 
     function getAllContentDigests() external view returns(bytes32[] memory) {
@@ -93,39 +124,44 @@ contract Platform is Ownable {
         return fullContent;
     }
 
-    function getContentSets() external view returns(bytes32[][] memory) {
+    function getContentCollections() external view returns(bytes32[][] memory) {
         return _contentDigests;
     }
 
-    function getContentSetById(uint256 _contentSetId) external onlyExistingContentSetId(_contentSetId) view returns(bytes32[] memory) {
-        return _contentDigests[_contentSetId];
+    function getContentCollectionById(uint256 _contentCollectionId) external onlyExistingContentCollectionId(_contentCollectionId) view returns(bytes32[] memory) {
+        return _contentDigests[_contentCollectionId];
     }
 
     /// > [[[[[[[[[[[ Platform Metadata Methods ]]]]]]]]]]]
 
     function setPlatformMetadataDigest(bytes32 _platformMetadataDigest) external onlyMetadataManagerOrOwner {
         platformMetadataDigest = _platformMetadataDigest;
+        IObservability(o11y).emitPlatformMetadataDigestSet(_platformMetadataDigest);
     }
 
     /// > [[[[[[[[[[[ Role Methods ]]]]]]]]]]]
 
     function setMetadataManager(address _metadataManager, bool _allowed) external onlyOwner {
         _setMetadataManager(_metadataManager, _allowed);
+        IObservability(o11y).emitMetadataManagerSet(_metadataManager, _allowed);
     }
 
     function setMetadataManagers(address[] calldata _metadataManagers, bool _allowed) external onlyOwner {
         for(uint256 i = 0; i < _metadataManagers.length; i++) {
             _setMetadataManager(_metadataManagers[i], _allowed);
+            IObservability(o11y).emitMetadataManagerSet(_metadataManagers[i], _allowed);
         }
     }
 
     function setPublisher(address _publisher, bool _allowed) external onlyOwner {
         _setPublisher(_publisher, _allowed);
+         IObservability(o11y).emitPublisherSet(_publisher, _allowed);
     }
 
     function setPublishers(address[] calldata _publishers, bool _allowed) external onlyOwner {
         for(uint256 i = 0; i < _publishers.length; i++) {
             allowedPublishers[_publishers[i]] = _allowed;
+            IObservability(o11y).emitPublisherSet(_publishers[i], _allowed);
         }
     }
     
@@ -141,24 +177,24 @@ contract Platform is Ownable {
         return size;
     }
 
-    function _addContentSet(bytes32[] memory _values) internal {
+    function _addContentCollection(bytes32[] memory _values) internal {
         _contentDigests.push(_values);
     }
 
-    function _setContentSet(uint256 _contentSetId, bytes32[] memory _values) internal {
-        _contentDigests[_contentSetId] = _values;
+    function _setContentCollection(uint256 _contentCollectionId, bytes32[] memory _values) internal {
+        _contentDigests[_contentCollectionId] = _values;
     }
 
-    function _setContentDigest(uint256 _contentSetId, uint256 _contentIndex, bytes32 _digest) internal {
-        _contentDigests[_contentSetId][_contentIndex] = _digest;
+    function _setContentDigest(uint256 _contentCollectionId, uint256 _contentIndex, bytes32 _digest) internal {
+        _contentDigests[_contentCollectionId][_contentIndex] = _digest;
     }
 
-    function _deleteContentSet(uint256 _contentSetId) internal {
-        delete _contentDigests[_contentSetId];
+    function _deleteContentCollection(uint256 _contentCollectionId) internal {
+        delete _contentDigests[_contentCollectionId];
     }
 
-    function _deleteContentDigest(uint256 _contentSetId, uint256 _contentIndex) internal {
-        delete _contentDigests[_contentSetId][_contentIndex];
+    function _deleteContentDigest(uint256 _contentCollectionId, uint256 _contentIndex) internal {
+        delete _contentDigests[_contentCollectionId][_contentIndex];
     }
 
     function _setMetadataManager(address _metadataManager, bool _allowed) internal {
