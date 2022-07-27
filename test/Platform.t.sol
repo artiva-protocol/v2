@@ -2,11 +2,10 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import {Platform} from "../src/platforms/Platform.sol";
-import {Observability} from "../src/observability/Observability.sol";
+import "../src/platform/Platform.sol";
+import "../src/observability/Observability.sol";
 
 contract PlatformTest is Test {
-
     Platform public platform;
     address factory = 0x0000000000000000000000000000000000000001;
     address owner = 0x0000000000000000000000000000000000000002;
@@ -15,6 +14,16 @@ contract PlatformTest is Test {
     address metadataManager = 0x0000000000000000000000000000000000000005;
     address otherMetadataManager = 0x0000000000000000000000000000000000000006;
     bytes32 sampleDigest = "W7_vCzkbZ_IJE9fsdoE4-trgeYpiWsds";
+    bytes32 otherSampleDigest = "B8_vCzkbZ_IJE9fsdoE4-trgeYpiWsds";
+
+    IPlatform.PlatformData initialPlatformData =
+        IPlatform.PlatformData({
+            platformMetadataDigest: "",
+            publishers: new address[](0),
+            metadataManagers: new address[](0),
+            initalContent: new bytes32[](0),
+            nonce: 0
+        });
 
     function setUp() public {
         address o11y = address(new Observability());
@@ -23,271 +32,135 @@ contract PlatformTest is Test {
 
     /// > [[[[[[[[[[[ Initializing ]]]]]]]]]]]
 
-    function test_initilize() public {
-        initilize();
+    function test_initialize() public {
+        initialize();
     }
 
     function testRevert_InitlizerNotAuthorized() public {
         vm.expectRevert("UNATHORIZED_CALLER");
-        platform.initilize(owner);
+        platform.initialize(owner, initialPlatformData);
     }
 
     /// > [[[[[[[[[[[ Content Methods ]]]]]]]]]]]
 
-    function testGas_AddContentCollection(uint16 size) public {
-        vm.assume(size > 5 && size < 200);
-        initilize();
+    function test_AddContentDigestOwner() public {
+        initialize();
 
         vm.prank(owner);
-        addContentCollection(size);
+        platform.addContentDigest(sampleDigest);
     }
 
-    function test_AddContentCollectionOwner() public {
-        initilize();
-
-        vm.prank(owner);
-        addContentCollection(20);
-    }
-
-    function test_AddContentCollectionPublisher() public {
-        initilize();
+    function testAddContentDigestPublisher() public {
+        initialize();
 
         vm.prank(owner);
         platform.setPublisher(publisher, true);
 
         vm.prank(publisher);
-        addContentCollection(20);
+        platform.addContentDigest(sampleDigest);
     }
 
-    function testRevert_AddContentCollectionNotOwnerOrPublisher() public {
-        initilize();
+    function test_AddManyContentDigests() public {
+        initialize();
+
+        bytes32[] memory content = new bytes32[](2);
+        content[0] = sampleDigest;
+        content[1] = otherSampleDigest;
+
+        vm.startPrank(owner);
+        platform.addManyContentDigests(content);
+        vm.stopPrank();
+    }
+
+    function testRevert_AddContentDigestNotOwnerOrPlatformOwner() public {
+        initialize();
+
+        vm.prank(owner);
+        platform.addContentDigest(sampleDigest);
+
         vm.expectRevert("NOT_PUBLISHER_OR_PLATFORM_OWNER");
-        addContentCollection(20);
+        platform.addContentDigest(sampleDigest);
     }
 
-    function test_SetContentCollectionOwner() public {
-        initilize();
+    function testRevert_AddContentDigestAlreadyPublished() public {
+        initialize();
 
         vm.startPrank(owner);
-        (uint256 contentCollectionId) = addContentCollection(20);
-        setContentCollection(contentCollectionId, 20);
+        platform.addContentDigest(sampleDigest);
+        platform.setPublisher(publisher, true);
+        vm.stopPrank();
+
+        vm.prank(publisher);
+        vm.expectRevert("DIGEST_ALREADY_PUBLISHED");
+        platform.addContentDigest(sampleDigest);
+    }
+
+    function test_RemoveContentDigestOwner() public {
+        initialize();
+
+        vm.startPrank(owner);
+        platform.addContentDigest(sampleDigest);
+
+        platform.removeContentDigest(sampleDigest);
         vm.stopPrank();
     }
 
-    function test_SetContentCollectionPublisher() public {
-        initilize();
+    function test_RemoveContentDigestPublisher() public {
+        initialize();
 
         vm.prank(owner);
         platform.setPublisher(publisher, true);
 
         vm.startPrank(publisher);
-        (uint256 contentCollectionId) = addContentCollection(20);
-        setContentCollection(contentCollectionId, 20);
+        platform.addContentDigest(sampleDigest);
+
+        platform.removeContentDigest(sampleDigest);
         vm.stopPrank();
     }
 
-    function testRevert_SetContentCollectionNotOwnerOrPlatformOwner() public {
-        initilize();
+    function test_RemoveManyContentDigests() public {
+        initialize();
 
-        vm.prank(owner);
-        (uint256 contentCollectionId) = addContentCollection(20);
-
-        vm.expectRevert("NOT_CONTENT_OWNER_OR_PLATFORM_OWNER");
-        setContentCollection(contentCollectionId, 20);
-    }
-
-    function testRevert_SetContentCollectionIdDoesNotExist() public {
-        initilize();
-        
-        vm.prank(owner);
-        vm.expectRevert("CONTENT_SET_ID_DOES_NOT_EXIST");
-        setContentCollection(0, 20);
-    }
-
-    function test_SetContentDigestOwner() public {
-        initilize();
+        bytes32[] memory content = new bytes32[](2);
+        content[0] = sampleDigest;
+        content[1] = otherSampleDigest;
 
         vm.startPrank(owner);
-        (uint256 contentCollectionId) = addContentCollection(20);
-        platform.setContentDigest(contentCollectionId, 0, sampleDigest);
+        platform.addManyContentDigests(content);
+
+        platform.removeManyContentDigests(content);
         vm.stopPrank();
     }
 
-    function test_SetContentDigestPublisher() public {
-        initilize();
+    function testRevert_RemoveContentDigestNotOwnerOrPlatformOwner() public {
+        initialize();
 
         vm.prank(owner);
-        platform.setPublisher(publisher, true);
+        platform.addContentDigest(sampleDigest);
 
-        vm.startPrank(publisher);
-        (uint256 contentCollectionId) = addContentCollection(20);
-        platform.setContentDigest(contentCollectionId, 0, sampleDigest);
-        vm.stopPrank();
+        vm.expectRevert("NOT_DIGEST_PUBLISHER_OR_OWNER");
+        platform.removeContentDigest(sampleDigest);
     }
 
-    function testRevert_SetContentDigestNotOwnerOrPlatformOwner() public {
-        initilize();
+    function testRevert_RemoveContentDigestNotPublished() public {
+        initialize();
 
         vm.prank(owner);
-        (uint256 contentCollectionId) = addContentCollection(20);
-
-        vm.expectRevert("NOT_CONTENT_OWNER_OR_PLATFORM_OWNER");
-        platform.setContentDigest(contentCollectionId, 0, sampleDigest);
-    }
-
-    function testRevert_SetContentDigestIdDoesNotExist() public {
-        initilize();
-        
-        vm.prank(owner);
-        vm.expectRevert("CONTENT_SET_ID_DOES_NOT_EXIST");
-        platform.setContentDigest(0, 0, sampleDigest);
-    }
-
-    function testRevert_SetContentDigestIndexDoesNotExist() public {
-        initilize();
-
-        vm.startPrank(owner);
-        (uint256 contentCollectionId) = addContentCollection(20);
-
-        vm.expectRevert("CONTENT_INDEX_DOES_NOT_EXIST");
-        platform.setContentDigest(contentCollectionId, 21, sampleDigest);
-        vm.stopPrank();
-    }
-
-    function test_DeleteContentCollectionOwner() public {
-        initilize();
-
-        vm.startPrank(owner);
-        (uint256 contentCollectionId) = addContentCollection(20);
-
-        platform.deleteContentCollection(contentCollectionId);
-        vm.stopPrank();
-    }
-
-    function test_DeleteContentCollectionPublisher() public {
-        initilize();
-
-        vm.prank(owner);
-        platform.setPublisher(publisher, true);
-
-        vm.startPrank(publisher);
-        (uint256 contentCollectionId) = addContentCollection(20);
-        platform.deleteContentCollection(contentCollectionId);
-        vm.stopPrank();
-    }
-
-    function testRevert_DeleteContentCollectionNotOwnerOrPlatformOwner() public {
-        initilize();
-
-        vm.prank(owner);
-        (uint256 contentCollectionId) = addContentCollection(20);
-
-        vm.expectRevert("NOT_CONTENT_OWNER_OR_PLATFORM_OWNER");
-        platform.deleteContentCollection(contentCollectionId);
-    }
-
-    function testRevert_DeleteContentCollectionIdDoesNotExist() public {
-        initilize();
-        
-        vm.prank(owner);
-        vm.expectRevert("CONTENT_SET_ID_DOES_NOT_EXIST");
-        platform.deleteContentCollection(0);
-    }
-
-    function test_DeleteContentDigestOwner() public {
-        initilize();
-
-        vm.startPrank(owner);
-        (uint256 contentCollectionId) = addContentCollection(20);
-
-        platform.deleteContentDigest(contentCollectionId, 0);
-        vm.stopPrank();
-    }
-
-    function test_DeleteContentDigestPublisher() public {
-        initilize();
-
-        vm.prank(owner);
-        platform.setPublisher(publisher, true);
-
-        vm.startPrank(publisher);
-        (uint256 contentCollectionId) = addContentCollection(20);
-        platform.deleteContentDigest(contentCollectionId, 0);
-        vm.stopPrank();
-    }
-
-    function testRevert_DeleteContentDigestNotOwnerOrPlatformOwner() public {
-        initilize();
-
-        vm.prank(owner);
-        (uint256 contentCollectionId) = addContentCollection(20);
-
-        vm.expectRevert("NOT_CONTENT_OWNER_OR_PLATFORM_OWNER");
-        platform.deleteContentDigest(contentCollectionId, 0);
-    }
-
-    function testRevert_DeleteContentDigestIdDoesNotExist() public {
-        initilize();
-        
-        vm.prank(owner);
-        vm.expectRevert("CONTENT_SET_ID_DOES_NOT_EXIST");
-        platform.deleteContentDigest(0, 0);
-    }
-
-    function testRevert_DeleteContentDigestIndexDoesNotExist() public {
-        initilize();
-
-        vm.startPrank(owner);
-        (uint256 contentCollectionId) = addContentCollection(20);
-
-        vm.expectRevert("CONTENT_INDEX_DOES_NOT_EXIST");
-        platform.deleteContentDigest(contentCollectionId, 21);
-        vm.stopPrank();
-    }
-
-    function test_GetAllContentDigests() public {
-        initilize();
-
-        vm.startPrank(owner);
-        addContentCollection(20);
-        addContentCollection(20);
-        vm.stopPrank();
-        bytes32[] memory digests = platform.getAllContentDigests();
-        require(digests.length == 40);
-    }
-
-    function test_GetAllContentCollections() public {
-        initilize();
-
-        vm.startPrank(owner);
-        addContentCollection(20);
-        addContentCollection(20);
-        vm.stopPrank();
-        bytes32[][] memory sets = platform.getContentCollections();
-        require(sets.length == 2);
-    }
-
-    function test_GetAllContentCollectionById() public {
-        initilize();
-
-        vm.startPrank(owner);
-        addContentCollection(20);
-        vm.stopPrank();
-        bytes32[] memory set = platform.getContentCollectionById(0);
-        require(set.length == 20);
+        vm.expectRevert("DIGEST_NOT_PUBLISHED");
+        platform.removeContentDigest(sampleDigest);
     }
 
     /// > [[[[[[[[[[[ Platform Metadata Methods ]]]]]]]]]]]
 
     function test_SetPlatformMetadataDigestOwner() public {
-        initilize();
+        initialize();
 
         vm.prank(owner);
         platform.setPlatformMetadataDigest(sampleDigest);
     }
 
     function test_SetPlatformMetadataDigestMetadataManager() public {
-        initilize();
+        initialize();
 
         vm.prank(owner);
         platform.setMetadataManager(metadataManager, true);
@@ -297,7 +170,7 @@ contract PlatformTest is Test {
     }
 
     function testRevert_SetPlatformMetadataNotMetadataManagerOrOwner() public {
-        initilize();
+        initialize();
 
         vm.expectRevert("NOT_METADATA_MANAGER_OR_PLATFORM_OWNER");
         platform.setPlatformMetadataDigest(sampleDigest);
@@ -306,7 +179,7 @@ contract PlatformTest is Test {
     /// > [[[[[[[[[[[ Role Methods ]]]]]]]]]]]
 
     function test_SetMetadataManager() public {
-        initilize();
+        initialize();
 
         vm.prank(owner);
         platform.setMetadataManager(metadataManager, true);
@@ -314,37 +187,37 @@ contract PlatformTest is Test {
     }
 
     function testRevert_SetMetadataManagerNotOwner() public {
-        initilize();
+        initialize();
 
-        vm.expectRevert("Ownable: caller is not the owner");
+        vm.expectRevert("caller is not the owner.");
         platform.setMetadataManager(metadataManager, true);
     }
 
     function test_SetMetadataManagers() public {
-        initilize();
+        initialize();
 
         address[] memory managers = new address[](2);
         managers[0] = metadataManager;
         managers[1] = otherMetadataManager;
 
         vm.prank(owner);
-        platform.setMetadataManagers(managers, true);
+        platform.setManyMetadataManagers(managers, true);
         require(platform.allowedMetadataManagers(otherMetadataManager));
     }
 
     function testRevert_SetMetadataManagersNotOwner() public {
-        initilize();
+        initialize();
 
         address[] memory managers = new address[](2);
         managers[0] = metadataManager;
         managers[1] = otherMetadataManager;
 
-        vm.expectRevert("Ownable: caller is not the owner");
-        platform.setMetadataManagers(managers, true);
+        vm.expectRevert("caller is not the owner.");
+        platform.setManyMetadataManagers(managers, true);
     }
 
     function test_SetPublisher() public {
-        initilize();
+        initialize();
 
         vm.prank(owner);
         platform.setPublisher(publisher, true);
@@ -352,55 +225,39 @@ contract PlatformTest is Test {
     }
 
     function testRevert_SetPublisherNotOwner() public {
-        initilize();
+        initialize();
 
-        vm.expectRevert("Ownable: caller is not the owner");
+        vm.expectRevert("caller is not the owner.");
         platform.setPublisher(publisher, true);
     }
 
     function test_SetPublishers() public {
-        initilize();
+        initialize();
 
         address[] memory publishers = new address[](2);
         publishers[0] = publisher;
         publishers[1] = otherPublisher;
 
         vm.prank(owner);
-        platform.setPublishers(publishers, true);
+        platform.setManyPublishers(publishers, true);
         require(platform.allowedPublishers(otherPublisher));
     }
 
     function testRevert_SetPublishersNotOwner() public {
-        initilize();
+        initialize();
 
         address[] memory publishers = new address[](2);
         publishers[0] = publisher;
         publishers[1] = otherPublisher;
 
-        vm.expectRevert("Ownable: caller is not the owner");
-        platform.setPublishers(publishers, true);
+        vm.expectRevert("caller is not the owner.");
+        platform.setManyPublishers(publishers, true);
     }
 
     /// > [[[[[[[[[[[ Internal Functions ]]]]]]]]]]]
 
-    function initilize() internal {
+    function initialize() internal {
         vm.prank(factory);
-        platform.initilize(owner);
-    }
-
-    function addContentCollection(uint16 size) internal returns(uint256) {
-        return platform.addContentCollection(getContentCollection(size));
-    }
-
-    function setContentCollection(uint256 contentCollectionId, uint16 size) internal {
-        platform.setContentCollection(contentCollectionId, getContentCollection(size));
-    }
-
-    function getContentCollection(uint16 size) internal view returns (bytes32[] memory) {
-        bytes32[] memory content = new bytes32[](size);
-        for(uint16 i = 0; i < size; i++) {
-            content[i] = sampleDigest;
-        }
-        return content;
+        platform.initialize(owner, initialPlatformData);
     }
 }

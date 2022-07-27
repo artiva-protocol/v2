@@ -2,5 +2,9 @@
   "name": "artiva-protocol",
   "version": "1.0.0",
   "author": "neokry",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "prettier": "^2.7.1",
+    "prettier-plugin-solidity": "^1.0.0-dev.23"
+  }
 }
