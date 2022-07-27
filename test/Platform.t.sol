@@ -13,17 +13,9 @@ contract PlatformTest is Test {
     address otherPublisher = address(4);
     address metadataManager = address(5);
     address otherMetadataManager = address(6);
+    address unauthorizedAccount = address(7);
     bytes32 sampleDigest = "W7_vCzkbZ_IJE9fsdoE4-trgeYpiWsds";
     bytes32 otherSampleDigest = "B8_vCzkbZ_IJE9fsdoE4-trgeYpiWsds";
-
-    IPlatform.PlatformData initialPlatformData =
-        IPlatform.PlatformData({
-            platformMetadataDigest: "",
-            publishers: new address[](0),
-            metadataManagers: new address[](0),
-            initalContent: new bytes32[](0),
-            nonce: 0
-        });
 
     function setUp() public {
         address o11y = address(new Observability());
@@ -36,9 +28,9 @@ contract PlatformTest is Test {
         initialize();
     }
 
-    function testRevert_InitlizerNotAuthorized() public {
-        vm.expectRevert("UNATHORIZED_CALLER");
-        platform.initialize(owner, initialPlatformData);
+    function testRevert_InitlizerNotFactory() public {
+        vm.expectRevert("NOT_FACTORY");
+        platform.initialize(owner, getInitalPlatformData());
     }
 
     /// > [[[[[[[[[[[ Content Methods ]]]]]]]]]]]
@@ -53,11 +45,13 @@ contract PlatformTest is Test {
     function testAddContentDigestPublisher() public {
         initialize();
 
-        vm.prank(owner);
-        platform.setPublisher(publisher, true);
+        vm.startPrank(owner);
+        platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
+        vm.stopPrank();
 
-        vm.prank(publisher);
+        vm.startPrank(publisher);
         platform.addContentDigest(sampleDigest);
+        vm.stopPrank();
     }
 
     function test_AddManyContentDigests() public {
@@ -78,7 +72,8 @@ contract PlatformTest is Test {
         vm.prank(owner);
         platform.addContentDigest(sampleDigest);
 
-        vm.expectRevert("NOT_PUBLISHER_OR_PLATFORM_OWNER");
+        vm.prank(unauthorizedAccount);
+        vm.expectRevert("UNAUTHORIZED_CALLER");
         platform.addContentDigest(sampleDigest);
     }
 
@@ -87,7 +82,7 @@ contract PlatformTest is Test {
 
         vm.startPrank(owner);
         platform.addContentDigest(sampleDigest);
-        platform.setPublisher(publisher, true);
+        platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
         vm.stopPrank();
 
         vm.prank(publisher);
@@ -108,8 +103,9 @@ contract PlatformTest is Test {
     function test_RemoveContentDigestPublisher() public {
         initialize();
 
-        vm.prank(owner);
-        platform.setPublisher(publisher, true);
+        vm.startPrank(owner);
+        platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
+        vm.stopPrank();
 
         vm.startPrank(publisher);
         platform.addContentDigest(sampleDigest);
@@ -138,7 +134,7 @@ contract PlatformTest is Test {
         vm.prank(owner);
         platform.addContentDigest(sampleDigest);
 
-        vm.expectRevert("NOT_DIGEST_PUBLISHER_OR_OWNER");
+        vm.expectRevert("NOT_DIGEST_PUBLISHER");
         platform.removeContentDigest(sampleDigest);
     }
 
@@ -146,7 +142,7 @@ contract PlatformTest is Test {
         initialize();
 
         vm.prank(owner);
-        vm.expectRevert("DIGEST_NOT_PUBLISHED");
+        vm.expectRevert("NOT_DIGEST_PUBLISHER");
         platform.removeContentDigest(sampleDigest);
     }
 
@@ -162,102 +158,46 @@ contract PlatformTest is Test {
     function test_SetPlatformMetadataDigestMetadataManager() public {
         initialize();
 
-        vm.prank(owner);
-        platform.setMetadataManager(metadataManager, true);
+        vm.startPrank(owner);
+        platform.grantRole(platform.METADATA_MANAGER_ROLE(), metadataManager);
+        vm.stopPrank();
 
-        vm.prank(metadataManager);
+        vm.startPrank(metadataManager);
         platform.setPlatformMetadataDigest(sampleDigest);
+        vm.stopPrank();
     }
 
     function testRevert_SetPlatformMetadataNotMetadataManagerOrOwner() public {
         initialize();
-
-        vm.expectRevert("NOT_METADATA_MANAGER_OR_PLATFORM_OWNER");
+        vm.prank(unauthorizedAccount);
+        vm.expectRevert("UNAUTHORIZED_CALLER");
         platform.setPlatformMetadataDigest(sampleDigest);
-    }
-
-    /// > [[[[[[[[[[[ Role Methods ]]]]]]]]]]]
-
-    function test_SetMetadataManager() public {
-        initialize();
-
-        vm.prank(owner);
-        platform.setMetadataManager(metadataManager, true);
-        require(platform.allowedMetadataManagers(metadataManager));
-    }
-
-    function testRevert_SetMetadataManagerNotOwner() public {
-        initialize();
-
-        vm.expectRevert("caller is not the owner.");
-        platform.setMetadataManager(metadataManager, true);
-    }
-
-    function test_SetMetadataManagers() public {
-        initialize();
-
-        address[] memory managers = new address[](2);
-        managers[0] = metadataManager;
-        managers[1] = otherMetadataManager;
-
-        vm.prank(owner);
-        platform.setManyMetadataManagers(managers, true);
-        require(platform.allowedMetadataManagers(otherMetadataManager));
-    }
-
-    function testRevert_SetMetadataManagersNotOwner() public {
-        initialize();
-
-        address[] memory managers = new address[](2);
-        managers[0] = metadataManager;
-        managers[1] = otherMetadataManager;
-
-        vm.expectRevert("caller is not the owner.");
-        platform.setManyMetadataManagers(managers, true);
-    }
-
-    function test_SetPublisher() public {
-        initialize();
-
-        vm.prank(owner);
-        platform.setPublisher(publisher, true);
-        require(platform.allowedPublishers(publisher));
-    }
-
-    function testRevert_SetPublisherNotOwner() public {
-        initialize();
-
-        vm.expectRevert("caller is not the owner.");
-        platform.setPublisher(publisher, true);
-    }
-
-    function test_SetPublishers() public {
-        initialize();
-
-        address[] memory publishers = new address[](2);
-        publishers[0] = publisher;
-        publishers[1] = otherPublisher;
-
-        vm.prank(owner);
-        platform.setManyPublishers(publishers, true);
-        require(platform.allowedPublishers(otherPublisher));
-    }
-
-    function testRevert_SetPublishersNotOwner() public {
-        initialize();
-
-        address[] memory publishers = new address[](2);
-        publishers[0] = publisher;
-        publishers[1] = otherPublisher;
-
-        vm.expectRevert("caller is not the owner.");
-        platform.setManyPublishers(publishers, true);
     }
 
     /// > [[[[[[[[[[[ Internal Functions ]]]]]]]]]]]
 
     function initialize() internal {
         vm.prank(factory);
-        platform.initialize(owner, initialPlatformData);
+        platform.initialize(owner, getInitalPlatformData());
+    }
+
+    function getInitalPlatformData()
+        internal
+        returns (IPlatform.PlatformData memory)
+    {
+        address[] memory publishers = new address[](1);
+        publishers[0] = owner;
+
+        address[] memory managers = new address[](1);
+        managers[0] = owner;
+
+        return
+            IPlatform.PlatformData({
+                platformMetadataDigest: "",
+                publishers: publishers,
+                metadataManagers: managers,
+                initalContent: new bytes32[](0),
+                nonce: 0
+            });
     }
 }

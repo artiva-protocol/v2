@@ -27,16 +27,11 @@ interface IObservabilityEvents {
         bytes32 indexed platformMetadataDigest
     );
 
-    event MetadataManagerSet(
+    event RoleSet(
         address indexed clone,
-        address indexed metadataManager,
-        bool indexed allowed
-    );
-
-    event PublisherSet(
-        address indexed clone,
-        address indexed publisher,
-        bool indexed allowed
+        address indexed account,
+        bytes32 indexed role,
+        bool granted
     );
 }
 
@@ -55,8 +50,9 @@ interface IObservability {
     function emitPlatformMetadataDigestSet(bytes32 platformMetadataDigest)
         external;
 
-    function emitMetadataManagerSet(address metadataManager, bool allowed)
-        external;
-
-    function emitPublisherSet(address publisher, bool allowed) external;
+    function emitRoleSet(
+        address account,
+        bytes32 role,
+        bool granted
+    ) external;
 }

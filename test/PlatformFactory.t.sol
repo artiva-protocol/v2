@@ -23,4 +23,26 @@ contract PlatformTest is Test {
         vm.expectRevert("caller is not the owner.");
         factory.setImplementation(address(2));
     }
+
+    function test_Create() public {
+        factory.create(getInitalPlatformData());
+    }
+
+    function getInitalPlatformData()
+        internal
+        pure
+        returns (IPlatform.PlatformData memory)
+    {
+        address[] memory publishers = new address[](1);
+        address[] memory managers = new address[](1);
+
+        return
+            IPlatform.PlatformData({
+                platformMetadataDigest: "",
+                publishers: publishers,
+                metadataManagers: managers,
+                initalContent: new bytes32[](0),
+                nonce: 0
+            });
+    }
 }

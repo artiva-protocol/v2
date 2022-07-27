@@ -58,6 +58,15 @@ contract PlatformFactory is Ownable, ReentrancyGuard {
         implementation = address(new Platform(address(this), o11y));
     }
 
+    /// > [[[[[[[[[[[ View functions ]]]]]]]]]]]
+
+    function getMessageHash(
+        address owner,
+        Platform.PlatformData memory platform
+    ) external view returns (bytes32) {
+        return _getMessageHash(owner, platform);
+    }
+
     /// > [[[[[[[[[[[ Implementation ]]]]]]]]]]]
 
     function setImplementation(address _implementation) external onlyOwner {
@@ -151,9 +160,7 @@ contract PlatformFactory is Ownable, ReentrancyGuard {
             );
     }
 
-    /// @dev Deploys a clone and calls the initialize function. Additionally,
-    /// this function calls `registerTributary` on the tributary registry, if
-    /// one is set.
+    /// @dev Deploys a clone and calls the initialize function
     function _deployCloneAndInitialize(
         address owner,
         Platform.PlatformData memory platform

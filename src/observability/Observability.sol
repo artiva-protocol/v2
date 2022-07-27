@@ -41,17 +41,11 @@ contract Observability is IObservability, IObservabilityEvents {
         emit PlatformMetadataDigestSet(msg.sender, platformMetadataDigest);
     }
 
-    function emitMetadataManagerSet(address metadataManager, bool allowed)
-        external
-        override
-    {
-        emit MetadataManagerSet(msg.sender, metadataManager, allowed);
-    }
-
-    function emitPublisherSet(address publisher, bool allowed)
-        external
-        override
-    {
-        emit PublisherSet(msg.sender, publisher, allowed);
+    function emitRoleSet(
+        address account,
+        bytes32 role,
+        bool granted
+    ) external override {
+        emit RoleSet(msg.sender, account, role, granted);
     }
 }
