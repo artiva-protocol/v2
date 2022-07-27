@@ -94,10 +94,7 @@ contract PlatformFactory is Ownable, ReentrancyGuard {
         bytes32 messageHash = _getMessageHash(owner, platform);
 
         // Assert the signature is valid.
-        require(
-            _isValid(owner, messageHash, v, r, s),
-            "invalid or unable to verify signature"
-        );
+        require(_isValid(owner, messageHash, v, r, s), "SIGNATURE_ERROR");
 
         clone = _deployCloneAndInitialize(owner, platform);
     }
@@ -109,7 +106,7 @@ contract PlatformFactory is Ownable, ReentrancyGuard {
         bytes32 r,
         bytes32 s
     ) internal view returns (bool) {
-        require(owner != address(0), "cannot validate");
+        require(owner != address(0), "CANNOT_VALIDATE");
 
         // If the owner is a contract, attempt to validate the
         // signature using EIP-1271.

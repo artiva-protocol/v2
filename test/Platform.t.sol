@@ -7,12 +7,12 @@ import "../src/observability/Observability.sol";
 
 contract PlatformTest is Test {
     Platform public platform;
-    address factory = 0x0000000000000000000000000000000000000001;
-    address owner = 0x0000000000000000000000000000000000000002;
-    address publisher = 0x0000000000000000000000000000000000000003;
-    address otherPublisher = 0x0000000000000000000000000000000000000004;
-    address metadataManager = 0x0000000000000000000000000000000000000005;
-    address otherMetadataManager = 0x0000000000000000000000000000000000000006;
+    address factory = address(1);
+    address owner = address(2);
+    address publisher = address(3);
+    address otherPublisher = address(4);
+    address metadataManager = address(5);
+    address otherMetadataManager = address(6);
     bytes32 sampleDigest = "W7_vCzkbZ_IJE9fsdoE4-trgeYpiWsds";
     bytes32 otherSampleDigest = "B8_vCzkbZ_IJE9fsdoE4-trgeYpiWsds";
 
