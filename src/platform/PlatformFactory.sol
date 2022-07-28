@@ -3,14 +3,15 @@ pragma solidity ^0.8.0;
 
 import "./Platform.sol";
 import "../observability/Observability.sol";
-import "../lib/ERC1271/interface/IERC1271.sol";
 import "../lib/Ownable.sol";
 
 import "openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "openzeppelin/contracts/proxy/Clones.sol";
 import "openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import "openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 
-contract PlatformFactory is Ownable, ReentrancyGuard {
+contract PlatformFactory is Ownable, ReentrancyGuard, EIP712 {
     /// @notice Version.
     uint8 public immutable VERSION = 1;
 
@@ -22,9 +23,6 @@ contract PlatformFactory is Ownable, ReentrancyGuard {
     /// @notice platform implementation.
     address public implementation;
 
-    /// @dev Contract/domain separator for generating a salt.
-    bytes32 public immutable DOMAIN_SEPARATOR;
-
     /// @dev Create function separator for generating a salt.
     bytes32 public constant CREATE_TYPEHASH =
         keccak256(
@@ -33,26 +31,14 @@ contract PlatformFactory is Ownable, ReentrancyGuard {
 
     /// > [[[[[[[[[[[ Signature Verification ]]]]]]]]]]]
 
-    /// @dev Used to verify smart contract signatures (ERC1271).
-    bytes4 internal constant MAGIC_VALUE =
-        bytes4(keccak256("isValidSignature(bytes32,bytes)"));
-
     /// @notice Deploys observability and implementation contracts.
-    constructor(address _owner) Ownable(_owner) {
+    constructor(
+        address _owner,
+        string memory domainName,
+        string memory domainVersion
+    ) Ownable(_owner) EIP712(domainName, domainVersion) {
         // Deploy and store Observability contract.
         o11y = address(new Observability());
-
-        // Generate domain separator.
-        DOMAIN_SEPARATOR = keccak256(
-            abi.encode(
-                keccak256(
-                    "EIP712Domain(string version,uint256 chainId,address verifyingContract)"
-                ),
-                keccak256(bytes("1")),
-                block.chainid,
-                address(this)
-            )
-        );
 
         // Deploy and store implementation contract.
         implementation = address(new Platform(address(this), o11y));
@@ -60,11 +46,28 @@ contract PlatformFactory is Ownable, ReentrancyGuard {
 
     /// > [[[[[[[[[[[ View functions ]]]]]]]]]]]
 
-    function getMessageHash(
-        address owner,
-        Platform.PlatformData memory platform
-    ) external view returns (bytes32) {
-        return _getMessageHash(owner, platform);
+    /// @notice Generates the address that a clone will be deployed to.
+    /// @param _implementation the WritingEditions address.
+    /// @param salt the entropy used by create2 for generatating a deterministic address.
+    function predictDeterministicAddress(address _implementation, bytes32 salt)
+        external
+        view
+        returns (address)
+    {
+        return
+            Clones.predictDeterministicAddress(
+                _implementation,
+                salt,
+                address(this)
+            );
+    }
+
+    function getSalt(address owner, Platform.PlatformData memory platform)
+        external
+        view
+        returns (bytes32)
+    {
+        return _getSalt(owner, platform);
     }
 
     /// > [[[[[[[[[[[ Implementation ]]]]]]]]]]]
@@ -100,53 +103,33 @@ contract PlatformFactory is Ownable, ReentrancyGuard {
         bytes32 r,
         bytes32 s
     ) external payable nonReentrant returns (address clone) {
-        bytes32 messageHash = _getMessageHash(owner, platform);
+        bytes32 salt = _getSalt(owner, platform);
 
         // Assert the signature is valid.
-        require(_isValid(owner, messageHash, v, r, s), "SIGNATURE_ERROR");
+        require(_isValid(owner, salt, v, r, s), "SIGNATURE_ERROR");
 
         clone = _deployCloneAndInitialize(owner, platform);
     }
 
     function _isValid(
         address owner,
-        bytes32 messageHash,
+        bytes32 digest,
         uint8 v,
         bytes32 r,
         bytes32 s
     ) internal view returns (bool) {
         require(owner != address(0), "CANNOT_VALIDATE");
-
-        // If the owner is a contract, attempt to validate the
-        // signature using EIP-1271.
-        if (owner.code.length != 0) {
-            bytes memory signature = abi.encodePacked(r, s, v);
-
-            // slither-disable-next-line unused-return
-            try
-                IERC1271(owner).isValidSignature(messageHash, signature)
-            returns (
-                // slither-disable-next-line uninitialized-local
-                bytes4 magicValue
-            ) {
-                return MAGIC_VALUE == magicValue;
-            } catch {
-                return false;
-            }
-        }
-
-        address recoveredAddress = ECDSA.recover(messageHash, v, r, s);
-
-        return recoveredAddress == owner;
+        bytes memory signature = abi.encodePacked(r, s, v);
+        return SignatureChecker.isValidSignatureNow(owner, digest, signature);
     }
 
-    function _getMessageHash(
-        address owner,
-        Platform.PlatformData memory platform
-    ) internal view returns (bytes32) {
+    function _getSalt(address owner, Platform.PlatformData memory platform)
+        internal
+        view
+        returns (bytes32)
+    {
         return
-            ECDSA.toTypedDataHash(
-                DOMAIN_SEPARATOR,
+            _hashTypedDataV4(
                 keccak256(
                     abi.encode(
                         CREATE_TYPEHASH,
@@ -154,7 +137,8 @@ contract PlatformFactory is Ownable, ReentrancyGuard {
                         platform.platformMetadataDigest,
                         platform.publishers,
                         platform.metadataManagers,
-                        platform.initalContent
+                        platform.initalContent,
+                        platform.nonce
                     )
                 )
             );
@@ -165,7 +149,19 @@ contract PlatformFactory is Ownable, ReentrancyGuard {
         address owner,
         Platform.PlatformData memory platform
     ) internal returns (address clone) {
-        clone = Clones.clone(implementation);
+        clone = Clones.cloneDeterministic(
+            implementation,
+            keccak256(
+                abi.encode(
+                    owner,
+                    platform.platformMetadataDigest,
+                    platform.publishers,
+                    platform.metadataManagers,
+                    platform.initalContent,
+                    platform.nonce
+                )
+            )
+        );
 
         // Initialize clone.
         Platform(clone).initialize(owner, platform);

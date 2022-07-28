@@ -39,7 +39,7 @@ contract PlatformTest is Test {
         initialize();
 
         vm.prank(owner);
-        platform.addContentDigest(sampleDigest);
+        platform.addContentDigest(sampleDigest, owner);
     }
 
     function testAddContentDigestPublisher() public {
@@ -50,7 +50,7 @@ contract PlatformTest is Test {
         vm.stopPrank();
 
         vm.startPrank(publisher);
-        platform.addContentDigest(sampleDigest);
+        platform.addContentDigest(sampleDigest, publisher);
         vm.stopPrank();
     }
 
@@ -62,7 +62,7 @@ contract PlatformTest is Test {
         content[1] = otherSampleDigest;
 
         vm.startPrank(owner);
-        platform.addManyContentDigests(content);
+        platform.addManyContentDigests(content, owner);
         vm.stopPrank();
     }
 
@@ -70,31 +70,31 @@ contract PlatformTest is Test {
         initialize();
 
         vm.prank(owner);
-        platform.addContentDigest(sampleDigest);
+        platform.addContentDigest(sampleDigest, owner);
 
         vm.prank(unauthorizedAccount);
         vm.expectRevert("UNAUTHORIZED_CALLER");
-        platform.addContentDigest(sampleDigest);
+        platform.addContentDigest(sampleDigest, unauthorizedAccount);
     }
 
     function testRevert_AddContentDigestAlreadyPublished() public {
         initialize();
 
         vm.startPrank(owner);
-        platform.addContentDigest(sampleDigest);
+        platform.addContentDigest(sampleDigest, owner);
         platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
         vm.stopPrank();
 
         vm.prank(publisher);
         vm.expectRevert("DIGEST_ALREADY_PUBLISHED");
-        platform.addContentDigest(sampleDigest);
+        platform.addContentDigest(sampleDigest, publisher);
     }
 
     function test_RemoveContentDigestOwner() public {
         initialize();
 
         vm.startPrank(owner);
-        platform.addContentDigest(sampleDigest);
+        platform.addContentDigest(sampleDigest, owner);
 
         platform.removeContentDigest(sampleDigest);
         vm.stopPrank();
@@ -108,7 +108,7 @@ contract PlatformTest is Test {
         vm.stopPrank();
 
         vm.startPrank(publisher);
-        platform.addContentDigest(sampleDigest);
+        platform.addContentDigest(sampleDigest, publisher);
 
         platform.removeContentDigest(sampleDigest);
         vm.stopPrank();
@@ -122,7 +122,7 @@ contract PlatformTest is Test {
         content[1] = otherSampleDigest;
 
         vm.startPrank(owner);
-        platform.addManyContentDigests(content);
+        platform.addManyContentDigests(content, owner);
 
         platform.removeManyContentDigests(content);
         vm.stopPrank();
@@ -132,9 +132,9 @@ contract PlatformTest is Test {
         initialize();
 
         vm.prank(owner);
-        platform.addContentDigest(sampleDigest);
+        platform.addContentDigest(sampleDigest, owner);
 
-        vm.expectRevert("NOT_DIGEST_PUBLISHER");
+        vm.expectRevert("NOT_DIGEST_OWNER");
         platform.removeContentDigest(sampleDigest);
     }
 
@@ -142,7 +142,7 @@ contract PlatformTest is Test {
         initialize();
 
         vm.prank(owner);
-        vm.expectRevert("NOT_DIGEST_PUBLISHER");
+        vm.expectRevert("NOT_DIGEST_OWNER");
         platform.removeContentDigest(sampleDigest);
     }
 
@@ -183,6 +183,7 @@ contract PlatformTest is Test {
 
     function getInitalPlatformData()
         internal
+        view
         returns (IPlatform.PlatformData memory)
     {
         address[] memory publishers = new address[](1);

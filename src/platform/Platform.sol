@@ -26,7 +26,7 @@ contract Platform is AccessControl, IPlatform {
     bytes32 public platformMetadataDigest;
 
     /// @notice Mapping of content digests to their publishers
-    mapping(bytes32 => address) contentDigestToPublisher;
+    mapping(bytes32 => address) contentDigestToOwner;
 
     bytes32 public constant override CONTENT_PUBLISHER_ROLE =
         keccak256("CONTENT_PUBLISHER_ROLE");
@@ -36,8 +36,8 @@ contract Platform is AccessControl, IPlatform {
 
     modifier onlyDigestPublisher(bytes32 _digest) {
         require(
-            contentDigestToPublisher[_digest] == msg.sender,
-            "NOT_DIGEST_PUBLISHER"
+            contentDigestToOwner[_digest] == msg.sender,
+            "NOT_DIGEST_OWNER"
         );
         _;
     }
@@ -63,75 +63,82 @@ contract Platform is AccessControl, IPlatform {
         o11y = _o11y;
     }
 
+    /// > [[[[[[[[[[[ View Methods ]]]]]]]]]]]
+
+    function getDefaultAdminRole() external view returns (bytes32) {
+        return DEFAULT_ADMIN_ROLE;
+    }
+
     /// > [[[[[[[[[[[ Initializing ]]]]]]]]]]]
 
-    function initialize(address _owner, PlatformData memory _platform)
-        external
-    {
+    function initialize(address owner, PlatformData memory platform) external {
         require(msg.sender == factory, "NOT_FACTORY");
 
-        if (_platform.platformMetadataDigest.length > 0)
-            platformMetadataDigest = _platform.platformMetadataDigest;
+        if (platform.platformMetadataDigest.length > 0)
+            platformMetadataDigest = platform.platformMetadataDigest;
 
-        for (uint256 i; i < _platform.initalContent.length; i++) {
-            _addContentDigest(_platform.initalContent[i], _owner);
+        for (uint256 i; i < platform.initalContent.length; i++) {
+            _addContentDigest(platform.initalContent[i], owner);
             IObservability(o11y).emitContentDigestAdded(
-                _platform.initalContent[i]
+                platform.initalContent[i],
+                owner
             );
         }
 
-        for (uint256 i; i < _platform.publishers.length; i++) {
-            _setupRole(CONTENT_PUBLISHER_ROLE, _platform.publishers[i]);
+        for (uint256 i; i < platform.publishers.length; i++) {
+            _setupRole(CONTENT_PUBLISHER_ROLE, platform.publishers[i]);
             IObservability(o11y).emitRoleSet(
-                _platform.publishers[i],
+                platform.publishers[i],
                 CONTENT_PUBLISHER_ROLE,
                 true
             );
         }
 
-        for (uint256 i; i < _platform.metadataManagers.length; i++) {
-            _setupRole(METADATA_MANAGER_ROLE, _platform.metadataManagers[i]);
+        for (uint256 i; i < platform.metadataManagers.length; i++) {
+            _setupRole(METADATA_MANAGER_ROLE, platform.metadataManagers[i]);
             IObservability(o11y).emitRoleSet(
-                _platform.metadataManagers[i],
+                platform.metadataManagers[i],
                 METADATA_MANAGER_ROLE,
                 true
             );
         }
 
-        _setupRole(DEFAULT_ADMIN_ROLE, _owner);
+        _setupRole(DEFAULT_ADMIN_ROLE, owner);
     }
 
     /// > [[[[[[[[[[[ Digest Methods ]]]]]]]]]]]
 
-    function addContentDigest(bytes32 _digest)
+    function addContentDigest(bytes32 digest, address owner)
         public
         onlyRoleMember(CONTENT_PUBLISHER_ROLE)
     {
         require(
-            contentDigestToPublisher[_digest] == address(0),
+            contentDigestToOwner[digest] == address(0),
             "DIGEST_ALREADY_PUBLISHED"
         );
-        _addContentDigest(_digest, msg.sender);
-        IObservability(o11y).emitContentDigestAdded(_digest);
+        _addContentDigest(digest, owner);
+        IObservability(o11y).emitContentDigestAdded(digest, owner);
     }
 
-    function addManyContentDigests(bytes32[] memory _digests) public {
-        for (uint256 i; i < _digests.length; i++) {
-            addContentDigest(_digests[i]);
+    function addManyContentDigests(bytes32[] memory digests, address owner)
+        public
+    {
+        for (uint256 i; i < digests.length; i++) {
+            addContentDigest(digests[i], owner);
         }
     }
 
-    function removeContentDigest(bytes32 _digest)
+    function removeContentDigest(bytes32 digest)
         public
-        onlyDigestPublisher(_digest)
+        onlyDigestPublisher(digest)
     {
-        _removeContentDigest(_digest);
-        IObservability(o11y).emitContentDigestRemoved(_digest);
+        _removeContentDigest(digest);
+        IObservability(o11y).emitContentDigestRemoved(digest);
     }
 
-    function removeManyContentDigests(bytes32[] memory _digests) public {
-        for (uint256 i; i < _digests.length; i++) {
-            removeContentDigest(_digests[i]);
+    function removeManyContentDigests(bytes32[] memory digests) public {
+        for (uint256 i; i < digests.length; i++) {
+            removeContentDigest(digests[i]);
         }
     }
 
@@ -150,25 +157,25 @@ contract Platform is AccessControl, IPlatform {
     /// > [[[[[[[[[[[ Role Methods ]]]]]]]]]]]
 
     function setManyRoles(
-        address[] memory _accounts,
-        bytes32 _role,
-        bool _grant
+        address[] memory accounts,
+        bytes32 role,
+        bool grant
     ) public {
-        for (uint256 i = 0; i < _accounts.length; i++) {
-            if (_grant) grantRole(_role, _accounts[i]);
-            else revokeRole(_role, _accounts[i]);
+        for (uint256 i = 0; i < accounts.length; i++) {
+            if (grant) grantRole(role, accounts[i]);
+            else revokeRole(role, accounts[i]);
 
-            IObservability(o11y).emitRoleSet(_accounts[i], _role, _grant);
+            IObservability(o11y).emitRoleSet(accounts[i], role, grant);
         }
     }
 
     /// > [[[[[[[[[[[ Internal Functions ]]]]]]]]]]]
 
-    function _addContentDigest(bytes32 _digest, address publisher) internal {
-        contentDigestToPublisher[_digest] = publisher;
+    function _addContentDigest(bytes32 digest, address publisher) internal {
+        contentDigestToOwner[digest] = publisher;
     }
 
-    function _removeContentDigest(bytes32 _digest) internal {
-        delete contentDigestToPublisher[_digest];
+    function _removeContentDigest(bytes32 digest) internal {
+        delete contentDigestToOwner[digest];
     }
 }

@@ -26,8 +26,11 @@ contract Observability is IObservability, IObservabilityEvents {
 
     /// > [[[[[[[[[[[ Clone functions ]]]]]]]]]]]
 
-    function emitContentDigestAdded(bytes32 digest) external override {
-        emit ContentDigestAdded(msg.sender, digest);
+    function emitContentDigestAdded(bytes32 digest, address owner)
+        external
+        override
+    {
+        emit ContentDigestAdded(msg.sender, digest, owner);
     }
 
     function emitContentDigestRemoved(bytes32 digest) external override {

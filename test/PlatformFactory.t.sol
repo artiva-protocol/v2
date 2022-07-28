@@ -8,10 +8,14 @@ import "../src/observability/Observability.sol";
 
 contract PlatformTest is Test {
     PlatformFactory factory;
-    address owner = address(1);
+
+    address internal owner;
+    uint256 internal ownerPrivateKey;
 
     function setUp() public {
-        factory = new PlatformFactory(owner);
+        ownerPrivateKey = 0xA11CE;
+        owner = vm.addr(ownerPrivateKey);
+        factory = new PlatformFactory(owner, "Artiva", "1");
     }
 
     function test_SetImplementation() public {
@@ -26,6 +30,61 @@ contract PlatformTest is Test {
 
     function test_Create() public {
         factory.create(getInitalPlatformData());
+    }
+
+    function test_CreateWithSig() public {
+        IPlatform.PlatformData memory platformData = getInitalPlatformData();
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            ownerPrivateKey,
+            factory.getSalt(owner, platformData)
+        );
+        factory.createWithSignature(owner, platformData, v, r, s);
+    }
+
+    function testRevert_CreateWithSigAddressZero() public {
+        IPlatform.PlatformData memory platformData = getInitalPlatformData();
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            ownerPrivateKey,
+            factory.getSalt(address(0), platformData)
+        );
+        vm.expectRevert("CANNOT_VALIDATE");
+        factory.createWithSignature(address(0), platformData, v, r, s);
+    }
+
+    function testRevert_CreateWithSigInvalidOwner() public {
+        IPlatform.PlatformData memory platformData = getInitalPlatformData();
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            ownerPrivateKey,
+            factory.getSalt(address(1), platformData)
+        );
+        vm.expectRevert("SIGNATURE_ERROR");
+        factory.createWithSignature(address(1), platformData, v, r, s);
+    }
+
+    function testRevert_CreateWithSigInvalidPlatformData() public {
+        IPlatform.PlatformData memory platformData = getInitalPlatformData();
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            ownerPrivateKey,
+            factory.getSalt(owner, platformData)
+        );
+
+        platformData.nonce = 1;
+
+        vm.expectRevert("SIGNATURE_ERROR");
+        factory.createWithSignature(owner, platformData, v, r, s);
+    }
+
+    function testRevert_CreateWithSigAlreadyUsedSignature() public {
+        IPlatform.PlatformData memory platformData = getInitalPlatformData();
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            ownerPrivateKey,
+            factory.getSalt(owner, platformData)
+        );
+
+        factory.createWithSignature(owner, platformData, v, r, s);
+
+        vm.expectRevert("ERC1167: create2 failed");
+        factory.createWithSignature(owner, platformData, v, r, s);
     }
 
     function getInitalPlatformData()

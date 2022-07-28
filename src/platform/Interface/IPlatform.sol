@@ -19,4 +19,8 @@ interface IPlatform {
     function factory() external returns (address);
 
     function o11y() external returns (address);
+
+    function getDefaultAdminRole() external view returns (bytes32);
+
+    function addContentDigest(bytes32 _digest, address owner) external;
 }

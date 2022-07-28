@@ -18,7 +18,11 @@ interface IObservabilityEvents {
 
     /// > [[[[[[[[[[[ Clone events ]]]]]]]]]]]
 
-    event ContentDigestAdded(address indexed clone, bytes32 indexed digest);
+    event ContentDigestAdded(
+        address indexed clone,
+        bytes32 indexed digest,
+        address indexed owner
+    );
 
     event ContentDigestRemoved(address indexed clone, bytes32 indexed digest);
 
@@ -43,7 +47,7 @@ interface IObservability {
         address newImplementation
     ) external;
 
-    function emitContentDigestAdded(bytes32 digest) external;
+    function emitContentDigestAdded(bytes32 digest, address owner) external;
 
     function emitContentDigestRemoved(bytes32 digest) external;
 
