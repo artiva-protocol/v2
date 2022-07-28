@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import "forge-std/Test.sol";
 import "../src/platform/Platform.sol";
 import "../src/observability/Observability.sol";
+import "@opengsn/contracts/src/forwarder/Forwarder.sol";
 
 contract PlatformTest is Test {
     Platform public platform;
@@ -19,7 +20,8 @@ contract PlatformTest is Test {
 
     function setUp() public {
         address o11y = address(new Observability());
-        platform = new Platform(factory, o11y);
+        address fowarder = address(new Forwarder());
+        platform = new Platform(factory, o11y, fowarder);
     }
 
     /// > [[[[[[[[[[[ Initializing ]]]]]]]]]]]

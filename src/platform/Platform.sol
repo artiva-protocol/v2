@@ -4,9 +4,10 @@ pragma solidity ^0.8.13;
 import "../observability/interface/IObservability.sol";
 import "./interface/IPlatform.sol";
 
-import "openzeppelin/contracts/access/AccessControl.sol";
+import "../lib/AccessControlERC2771.sol";
+import "@opengsn/contracts/src/ERC2771Recipient.sol";
 
-contract Platform is AccessControl, IPlatform {
+contract Platform is AccessControl, IPlatform, ERC2771Recipient {
     /// > [[[[[[[[[[[ Version ]]]]]]]]]]]
 
     /// @notice Version.
@@ -36,20 +37,24 @@ contract Platform is AccessControl, IPlatform {
 
     modifier onlyDigestPublisher(bytes32 _digest) {
         require(
-            contentDigestToOwner[_digest] == msg.sender,
+            contentDigestToOwner[_digest] == _msgSender(),
             "NOT_DIGEST_OWNER"
         );
         _;
     }
 
     modifier onlyRoleMember(bytes32 role) {
-        require(hasRole(role, msg.sender), "UNAUTHORIZED_CALLER");
+        require(hasRole(role, _msgSender()), "UNAUTHORIZED_CALLER");
         _;
     }
 
     /// > [[[[[[[[[[[ Constructor ]]]]]]]]]]]
 
-    constructor(address _factory, address _o11y) {
+    constructor(
+        address _factory,
+        address _o11y,
+        address forwarder
+    ) {
         // Assert not the zero-address.
         require(_factory != address(0), "MUST_SET_FACTORY");
 
@@ -61,18 +66,21 @@ contract Platform is AccessControl, IPlatform {
 
         // Store observability.
         o11y = _o11y;
+
+        //Set the forwarder address for GSN
+        _setTrustedForwarder(forwarder);
     }
 
     /// > [[[[[[[[[[[ View Methods ]]]]]]]]]]]
 
-    function getDefaultAdminRole() external view returns (bytes32) {
+    function getDefaultAdminRole() external pure returns (bytes32) {
         return DEFAULT_ADMIN_ROLE;
     }
 
     /// > [[[[[[[[[[[ Initializing ]]]]]]]]]]]
 
     function initialize(address owner, PlatformData memory platform) external {
-        require(msg.sender == factory, "NOT_FACTORY");
+        require(_msgSender() == factory, "NOT_FACTORY");
 
         if (platform.platformMetadataDigest.length > 0)
             platformMetadataDigest = platform.platformMetadataDigest;
@@ -177,5 +185,29 @@ contract Platform is AccessControl, IPlatform {
 
     function _removeContentDigest(bytes32 digest) internal {
         delete contentDigestToOwner[digest];
+    }
+
+    /**
+     * @notice Use this method the contract anywhere instead of msg.sender to support relayed transactions.
+     * @return ret The real sender of this call.
+     * For a call that came through the Forwarder the real sender is extracted from the last 20 bytes of the `msg.data`.
+     * Otherwise simply returns `msg.sender`.
+     */
+    function _msgSender()
+        internal
+        view
+        override(AccessControl, ERC2771Recipient)
+        returns (address ret)
+    {
+        if (msg.data.length >= 20 && isTrustedForwarder(msg.sender)) {
+            // At this point we know that the sender is a trusted forwarder,
+            // so we trust that the last bytes of msg.data are the verified sender address.
+            // extract sender address from the end of msg.data
+            assembly {
+                ret := shr(96, calldataload(sub(calldatasize(), 20)))
+            }
+        } else {
+            ret = msg.sender;
+        }
     }
 }

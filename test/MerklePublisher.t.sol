@@ -5,7 +5,8 @@ import "forge-std/Test.sol";
 import "../src/platform/Platform.sol";
 import "../src/publishers/MerklePublisher/MerklePublisher.sol";
 import "../src/observability/Observability.sol";
-import "openzeppelin/contracts/access/IAccessControl.sol";
+import "@openzeppelin/contracts/access/IAccessControl.sol";
+import "@opengsn/contracts/src/forwarder/Forwarder.sol";
 
 contract MerklePublisherTest is Test {
     address factory = address(1);
@@ -19,8 +20,9 @@ contract MerklePublisherTest is Test {
 
     function setUp() public {
         address o11y = address(new Observability());
-        platform = new Platform(factory, o11y);
-        publisher = new MerklePublisher("Artiva", "1");
+        address fowarder = address(new Forwarder());
+        platform = new Platform(factory, o11y, fowarder);
+        publisher = new MerklePublisher(fowarder);
     }
 
     function test_SetMerkleRoot() public {
@@ -38,6 +40,15 @@ contract MerklePublisherTest is Test {
     }
 
     function testRevert_SetMerkleRootNotOwner() public {
+        vm.expectRevert("MerklePublisher: NOT_AUTHORIZED");
+        publisher.setMerkleRoot(
+            address(platform),
+            sampleMerkleRoot,
+            sampleLeavesDigest
+        );
+    }
+
+    function test_Publish() public {
         vm.expectRevert("MerklePublisher: NOT_AUTHORIZED");
         publisher.setMerkleRoot(
             address(platform),

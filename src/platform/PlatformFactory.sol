@@ -3,15 +3,13 @@ pragma solidity ^0.8.0;
 
 import "./Platform.sol";
 import "../observability/Observability.sol";
-import "../lib/Ownable.sol";
+import "../lib/OwnableERC2771.sol";
 
-import "openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "openzeppelin/contracts/proxy/Clones.sol";
-import "openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
-import "openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
+import "@openzeppelin/contracts/proxy/Clones.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@opengsn/contracts/src/ERC2771Recipient.sol";
 
-contract PlatformFactory is Ownable, ReentrancyGuard, EIP712 {
+contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
     /// @notice Version.
     uint8 public immutable VERSION = 1;
 
@@ -23,25 +21,18 @@ contract PlatformFactory is Ownable, ReentrancyGuard, EIP712 {
     /// @notice platform implementation.
     address public implementation;
 
-    /// @dev Create function separator for generating a salt.
-    bytes32 public constant CREATE_TYPEHASH =
-        keccak256(
-            "Create(address owner,bytes32 platformMetadataDigest,address[] publishers,address[] metadataManagers,bytes32[] initalContent,uint256 nonce)"
-        );
-
     /// > [[[[[[[[[[[ Signature Verification ]]]]]]]]]]]
 
-    /// @notice Deploys observability and implementation contracts.
-    constructor(
-        address _owner,
-        string memory domainName,
-        string memory domainVersion
-    ) Ownable(_owner) EIP712(domainName, domainVersion) {
+    /// @notice Deploys observability and implementation contracts, sets fowarder for GSN.
+    constructor(address _owner, address forwarder) Ownable(_owner) {
         // Deploy and store Observability contract.
         o11y = address(new Observability());
 
         // Deploy and store implementation contract.
-        implementation = address(new Platform(address(this), o11y));
+        implementation = address(new Platform(address(this), o11y, forwarder));
+
+        //Set the forwarder address for GSN
+        _setTrustedForwarder(forwarder);
     }
 
     /// > [[[[[[[[[[[ View functions ]]]]]]]]]]]
@@ -64,7 +55,7 @@ contract PlatformFactory is Ownable, ReentrancyGuard, EIP712 {
 
     function getSalt(address owner, Platform.PlatformData memory platform)
         external
-        view
+        pure
         returns (bytes32)
     {
         return _getSalt(owner, platform);
@@ -93,53 +84,23 @@ contract PlatformFactory is Ownable, ReentrancyGuard, EIP712 {
         external
         returns (address clone)
     {
-        clone = _deployCloneAndInitialize(msg.sender, platform);
-    }
-
-    function createWithSignature(
-        address owner,
-        Platform.PlatformData memory platform,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external payable nonReentrant returns (address clone) {
-        bytes32 salt = _getSalt(owner, platform);
-
-        // Assert the signature is valid.
-        require(_isValid(owner, salt, v, r, s), "SIGNATURE_ERROR");
-
-        clone = _deployCloneAndInitialize(owner, platform);
-    }
-
-    function _isValid(
-        address owner,
-        bytes32 digest,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) internal view returns (bool) {
-        require(owner != address(0), "CANNOT_VALIDATE");
-        bytes memory signature = abi.encodePacked(r, s, v);
-        return SignatureChecker.isValidSignatureNow(owner, digest, signature);
+        clone = _deployCloneAndInitialize(_msgSender(), platform);
     }
 
     function _getSalt(address owner, Platform.PlatformData memory platform)
         internal
-        view
+        pure
         returns (bytes32)
     {
         return
-            _hashTypedDataV4(
-                keccak256(
-                    abi.encode(
-                        CREATE_TYPEHASH,
-                        owner,
-                        platform.platformMetadataDigest,
-                        platform.publishers,
-                        platform.metadataManagers,
-                        platform.initalContent,
-                        platform.nonce
-                    )
+            keccak256(
+                abi.encode(
+                    owner,
+                    platform.platformMetadataDigest,
+                    platform.publishers,
+                    platform.metadataManagers,
+                    platform.initalContent,
+                    platform.nonce
                 )
             );
     }
@@ -167,5 +128,29 @@ contract PlatformFactory is Ownable, ReentrancyGuard, EIP712 {
         Platform(clone).initialize(owner, platform);
 
         IObservability(o11y).emitDeploymentEvent(owner, clone);
+    }
+
+    /**
+     * @notice Use this method the contract anywhere instead of msg.sender to support relayed transactions.
+     * @return ret The real sender of this call.
+     * For a call that came through the Forwarder the real sender is extracted from the last 20 bytes of the `msg.data`.
+     * Otherwise simply returns `msg.sender`.
+     */
+    function _msgSender()
+        internal
+        view
+        override(Ownable, ERC2771Recipient)
+        returns (address ret)
+    {
+        if (msg.data.length >= 20 && isTrustedForwarder(msg.sender)) {
+            // At this point we know that the sender is a trusted forwarder,
+            // so we trust that the last bytes of msg.data are the verified sender address.
+            // extract sender address from the end of msg.data
+            assembly {
+                ret := shr(96, calldataload(sub(calldatasize(), 20)))
+            }
+        } else {
+            ret = msg.sender;
+        }
     }
 }

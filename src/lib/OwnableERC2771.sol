@@ -22,7 +22,7 @@ interface IOwnable {
     function isNextOwner() external view returns (bool);
 }
 
-contract Ownable is IOwnable, IOwnableEvents {
+abstract contract Ownable is IOwnable, IOwnableEvents {
     address public owner;
     address private nextOwner;
 
@@ -59,9 +59,9 @@ contract Ownable is IOwnable, IOwnableEvents {
     function acceptOwnership() external override onlyNextOwner {
         delete nextOwner;
 
-        owner = msg.sender;
+        owner = _msgSender();
 
-        emit OwnershipTransferred(owner, msg.sender);
+        emit OwnershipTransferred(owner, _msgSender());
     }
 
     /// @notice Renounce ownership by setting owner to zero address.
@@ -71,12 +71,12 @@ contract Ownable is IOwnable, IOwnableEvents {
 
     /// @notice Returns true if the caller is the current owner.
     function isOwner() public view override returns (bool) {
-        return msg.sender == owner;
+        return _msgSender() == owner;
     }
 
     /// @notice Returns true if the caller is the next owner.
     function isNextOwner() public view override returns (bool) {
-        return msg.sender == nextOwner;
+        return _msgSender() == nextOwner;
     }
 
     /// > [[[[[[[[[[[ Internal Functions ]]]]]]]]]]]
@@ -96,4 +96,6 @@ contract Ownable is IOwnable, IOwnableEvents {
 
         owner = address(0);
     }
+
+    function _msgSender() internal view virtual returns (address ret);
 }
