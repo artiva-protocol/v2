@@ -6,5 +6,14 @@
   "devDependencies": {
     "prettier": "^2.7.1",
     "prettier-plugin-solidity": "^1.0.0-dev.23"
+  },
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "deploy-dev": "forge script script/DeployDev.s.sol:Deploy --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --fork-url http://localhost:8545 --broadcast",
+    "deploy-staging": "source .env.staging && forge script script/DeployStaging.s.sol:Deploy --rpc-url $RPC_URL --private-key $PRIVATE_KEY --etherscan-api-key $ETHERSCAN_KEY --verify --broadcast -vvvv",
+    "deploy-prod": "",
+    "verify": "source .env.staging && forge verify-contract --chain-id 69 --num-of-optimizations 1000000 --constructor-args $(cast abi-encode 'constructor(address,address)' 0xa471C9508Acf13867282f36cfCe5c41D719ab78B 0x7A95fA73250dc53556d264522150A940d4C50238) --compiler-version v0.8.13+commit.fc410830 0x735117197ca0e8b09ffef2fc214dba2776300cca src/platform/PlatformFactory.sol:PlatformFactory $ETHERSCAN_KEY",
+    "verify-check": "source .env.staging && forge verify-check --chain-id 69 v8zclhru2vmrpefmbsbpn14qtz8zzjkmq3xv4drtxnzwtfvbyf $ETHERSCAN_KEY"
   }
 }

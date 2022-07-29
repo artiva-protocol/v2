@@ -8,8 +8,8 @@ import "./interface/IMerklePublisher.sol";
 import "@opengsn/contracts/src/ERC2771Recipient.sol";
 
 contract MerklePublisher is IMerklePublisher, ERC2771Recipient {
-    mapping(address => bytes32) platformToMerkleRoot;
-    mapping(address => bytes32) platformToLeavesDigest;
+    mapping(address => bytes32) public platformToMerkleRoot;
+    mapping(address => bytes32) public platformToLeavesDigest;
 
     /// > [[[[[[[[[[[ Merkle root functions ]]]]]]]]]]]
 

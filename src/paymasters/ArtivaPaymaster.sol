@@ -36,6 +36,11 @@ contract ArtivaPaymaster is Ownable, BasePaymaster {
     {
         (signature, maxPossibleGas);
 
+        require(
+            allowedTarget[relayRequest.request.to],
+            "target not authorized"
+        );
+
         bytes32 requestHash = getRequestHash(relayRequest);
         require(
             signer == ECDSA.recover(requestHash, approvalData),
