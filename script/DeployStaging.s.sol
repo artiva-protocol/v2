@@ -10,7 +10,30 @@ contract Deploy is Script {
 
     function run() public {
         vm.startBroadcast();
-        new PlatformFactory(OWNER, FORWARDER);
+        PlatformFactory factory = new PlatformFactory(OWNER, FORWARDER);
+        factory.create(getInitalPlatformData());
         vm.stopBroadcast();
+    }
+
+    function getInitalPlatformData()
+        internal
+        pure
+        returns (IPlatform.PlatformData memory)
+    {
+        address[] memory publishers = new address[](1);
+        address[] memory managers = new address[](1);
+        bytes32[] memory initalContent = new bytes32[](0);
+        publishers[0] = OWNER;
+        managers[0] = OWNER;
+        initalContent[0] = "W7_vCzkbZ_IJE9fsdoE4-trgeYpiWsds";
+
+        return
+            IPlatform.PlatformData({
+                platformMetadataDigest: "W7_vCzkbZ_IJE9fsdoE4-trgeYpiWsds",
+                publishers: publishers,
+                metadataManagers: managers,
+                initalContent: initalContent,
+                nonce: 0
+            });
     }
 }

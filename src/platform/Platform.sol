@@ -82,8 +82,12 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
     function initialize(address owner, PlatformData memory platform) external {
         require(_msgSender() == factory, "NOT_FACTORY");
 
-        if (platform.platformMetadataDigest.length > 0)
+        if (platform.platformMetadataDigest.length > 0) {
             platformMetadataDigest = platform.platformMetadataDigest;
+            IObservability(o11y).emitPlatformMetadataDigestSet(
+                platform.platformMetadataDigest
+            );
+        }
 
         for (uint256 i; i < platform.initalContent.length; i++) {
             _addContentDigest(platform.initalContent[i], owner);
