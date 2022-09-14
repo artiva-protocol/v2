@@ -6,6 +6,8 @@ import "./interface/IPlatform.sol";
 
 import "../lib/AccessControlERC2771.sol";
 import "@opengsn/contracts/src/ERC2771Recipient.sol";
+import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract Platform is AccessControl, IPlatform, ERC2771Recipient {
     /// > [[[[[[[[[[[ Version ]]]]]]]]]]]
@@ -13,48 +15,69 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
     /// @notice Version.
     uint8 public immutable override VERSION = 1;
 
-    /// > [[[[[[[[[[[ Authorization ]]]]]]]]]]]
+    /// > [[[[[[[[[[[ Configuration ]]]]]]]]]]]
 
     /// @notice Address that deploys and initializes clones.
     address public immutable override factory;
 
-    /// > [[[[[[[[[[[ Configuration ]]]]]]]]]]]
-
-    /// @notice Address for Mirror's observability contract.
+    /// @notice Address for Artiva's observability contract.
     address public immutable override o11y;
 
-    /// @notice Digest of the platform metadata content
-    bytes32 public platformMetadataDigest;
+    /// @notice Domain seperator for typed data
+    bytes32 public DOMAIN_SEPARATOR;
 
-    /// @notice Mapping of content digests to their publishers
-    mapping(bytes32 => address) contentDigestToOwner;
+    /// @notice URI of the platform metadata content
+    string public platformMetadataURI;
 
-    bytes32 public constant override CONTENT_PUBLISHER_ROLE =
+    /// @notice Mapping of content id to its content data.
+    mapping(uint256 => ContentData) contentIdToContentData;
+
+    /// @notice Mapping of address to its signature nonce used for publishing with signature.
+    mapping(address => uint256) addressToSignatureNonce;
+
+    /// @notice Content publisher role hash for AccessControl
+    bytes32 public immutable override CONTENT_PUBLISHER_ROLE =
         keccak256("CONTENT_PUBLISHER_ROLE");
 
-    bytes32 public constant override METADATA_MANAGER_ROLE =
+    /// @notice Metadata manager role hash for AccessControl
+    bytes32 public immutable override METADATA_MANAGER_ROLE =
         keccak256("METADATA_MANAGER_ROLE");
 
-    modifier onlyDigestPublisher(bytes32 _digest) {
-        require(
-            contentDigestToOwner[_digest] == _msgSender(),
-            "NOT_DIGEST_OWNER"
+    /// @notice Typed data struct for publishing authorization
+    bytes32 public immutable PUBLISH_AUTHORIZATION_TYPEHASH =
+        keccak256(
+            "PublishAuthorization(string message,address publishingKey,uint256 nonce)"
         );
+
+    /// > [[[[[[[[[[[ Private ]]]]]]]]]]]
+
+    /// @notice Private content id for indexing content
+    uint256 private _currentContentId = 0;
+
+    /// > [[[[[[[[[[[ Modifiers ]]]]]]]]]]]
+
+    /// @notice Checks if member is in role.
+    modifier onlyRoleMember(bytes32 role, address member) {
+        require(hasRole(role, member), "UNAUTHORIZED_CALLER");
         _;
     }
 
-    modifier onlyRoleMember(bytes32 role) {
-        require(hasRole(role, _msgSender()), "UNAUTHORIZED_CALLER");
+    /// @notice Checks if publishing signature is valid.
+    modifier onlyValidSignature(address signer, bytes calldata signature) {
+        require(
+            SignatureChecker.isValidSignatureNow(
+                signer,
+                getSigningMessage(signer),
+                signature
+            ),
+            "UNATHORIZED_SIGNATURE"
+        );
         _;
     }
 
     /// > [[[[[[[[[[[ Constructor ]]]]]]]]]]]
 
-    constructor(
-        address _factory,
-        address _o11y,
-        address forwarder
-    ) {
+    constructor(address _factory, address _o11y) {
         // Assert not the zero-address.
         require(_factory != address(0), "MUST_SET_FACTORY");
 
@@ -66,36 +89,49 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
 
         // Store observability.
         o11y = _o11y;
-
-        //Set the forwarder address for GSN
-        _setTrustedForwarder(forwarder);
     }
 
     /// > [[[[[[[[[[[ View Methods ]]]]]]]]]]]
 
+    /// @notice Returns admin role for use in composing contracts.
     function getDefaultAdminRole() external pure returns (bytes32) {
         return DEFAULT_ADMIN_ROLE;
     }
 
+    /// @notice Get typed data message for clients to execute functions with publishing keys.
+    function getSigningMessage(address signer) public view returns (bytes32) {
+        return
+            ECDSA.toTypedDataHash(
+                DOMAIN_SEPARATOR,
+                keccak256(
+                    abi.encode(
+                        PUBLISH_AUTHORIZATION_TYPEHASH,
+                        keccak256(
+                            bytes(
+                                "I authorize publishing on artiva from this device"
+                            )
+                        ),
+                        _msgSender(),
+                        addressToSignatureNonce[signer]
+                    )
+                )
+            );
+    }
+
     /// > [[[[[[[[[[[ Initializing ]]]]]]]]]]]
 
-    function initialize(address owner, PlatformData memory platform) external {
+    /// @notice Sets default platform data must be called by factory contract.
+    function initialize(
+        address owner,
+        address forwarder,
+        PlatformData memory platform
+    ) external {
         require(_msgSender() == factory, "NOT_FACTORY");
 
-        if (platform.platformMetadataDigest.length > 0) {
-            platformMetadataDigest = platform.platformMetadataDigest;
-            IObservability(o11y).emitPlatformMetadataDigestSet(
-                platform.platformMetadataDigest
-            );
-        }
+        /// > [[[[[[[[[[[ Roles ]]]]]]]]]]]
 
-        for (uint256 i; i < platform.initalContent.length; i++) {
-            _addContentDigest(platform.initalContent[i], owner);
-            IObservability(o11y).emitContentDigestAdded(
-                platform.initalContent[i],
-                owner
-            );
-        }
+        _setupRole(DEFAULT_ADMIN_ROLE, owner);
+        IObservability(o11y).emitRoleSet(owner, DEFAULT_ADMIN_ROLE, true);
 
         for (uint256 i; i < platform.publishers.length; i++) {
             _setupRole(CONTENT_PUBLISHER_ROLE, platform.publishers[i]);
@@ -115,84 +151,258 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
             );
         }
 
-        _setupRole(DEFAULT_ADMIN_ROLE, owner);
-    }
+        /// > [[[[[[[[[[[ GSN ]]]]]]]]]]]
 
-    /// > [[[[[[[[[[[ Digest Methods ]]]]]]]]]]]
+        require(forwarder != address(0), "MUST_SET_FORWARDER");
+        _setTrustedForwarder(forwarder);
 
-    function addContentDigest(bytes32 digest, address owner)
-        public
-        onlyRoleMember(CONTENT_PUBLISHER_ROLE)
-    {
-        require(
-            contentDigestToOwner[digest] == address(0),
-            "DIGEST_ALREADY_PUBLISHED"
+        /// > [[[[[[[[[[[ Typed data ]]]]]]]]]]]
+
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256(
+                    "EIP712Domain(string version,uint256 chainId,address verifyingContract)"
+                ),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(this)
+            )
         );
-        _addContentDigest(digest, owner);
-        IObservability(o11y).emitContentDigestAdded(digest, owner);
     }
 
-    function addManyContentDigests(bytes32[] memory digests, address owner)
+    /// > [[[[[[[[[[[ Nonce Methods ]]]]]]]]]]]
+
+    /// @notice Sets the signature nonce, can be used if a user wants to invalidate their publishing signature.
+    function setSignatureNonce(uint256 nonce) external {
+        addressToSignatureNonce[_msgSender()] = nonce;
+    }
+
+    /// > [[[[[[[[[[[ Content Methods ]]]]]]]]]]]
+
+    /// @notice Adds content to the platform.
+    function addContent(string calldata contentURI, address owner)
         public
+        onlyRoleMember(CONTENT_PUBLISHER_ROLE, _msgSender())
     {
-        for (uint256 i; i < digests.length; i++) {
-            addContentDigest(digests[i], owner);
-        }
+        uint256 contentId = _addContent(contentURI, owner);
+        IObservability(o11y).emitContentSet(contentId, contentURI, owner);
     }
 
-    function removeContentDigest(bytes32 digest)
+    /// @notice Adds content to the platform with support for publishing signatures.
+    function addContentWithSig(
+        string calldata contentURI,
+        address owner,
+        address signer,
+        bytes calldata signature
+    )
+        external
+        onlyRoleMember(CONTENT_PUBLISHER_ROLE, signer)
+        onlyValidSignature(signer, signature)
+    {
+        uint256 contentId = _addContent(contentURI, owner);
+        IObservability(o11y).emitContentSet(contentId, contentURI, owner);
+    }
+
+    /// @notice Sets content at a specific content ID. Useful for deleting of updating content.
+    function setContent(uint256 contentId, string calldata contentURI)
         public
-        onlyDigestPublisher(digest)
+        onlyRoleMember(CONTENT_PUBLISHER_ROLE, _msgSender())
     {
-        _removeContentDigest(digest);
-        IObservability(o11y).emitContentDigestRemoved(digest);
+        address owner = contentIdToContentData[contentId].owner;
+        require(owner != address(0), "NO_OWNER");
+        require(owner == _msgSender(), "SENDER_NOT_OWNER");
+
+        _setContent(contentId, contentURI);
+        IObservability(o11y).emitContentSet(contentId, contentURI, owner);
     }
 
-    function removeManyContentDigests(bytes32[] memory digests) public {
-        for (uint256 i; i < digests.length; i++) {
-            removeContentDigest(digests[i]);
-        }
+    /// @notice Sets content with support for publishing signatures.
+    function setContentWithSig(
+        uint256 contentId,
+        string calldata contentURI,
+        address signer,
+        bytes calldata signature
+    )
+        external
+        onlyRoleMember(CONTENT_PUBLISHER_ROLE, signer)
+        onlyValidSignature(signer, signature)
+    {
+        address owner = contentIdToContentData[contentId].owner;
+        require(owner != address(0), "NO_OWNER");
+        require(owner == signer, "SENDER_NOT_OWNER");
+
+        _setContent(contentId, contentURI);
+        IObservability(o11y).emitContentSet(contentId, contentURI, owner);
     }
 
     /// > [[[[[[[[[[[ Platform Metadata Methods ]]]]]]]]]]]
 
-    function setPlatformMetadataDigest(bytes32 _platformMetadataDigest)
+    /// @notice Set the metadata uri for the platform.
+    function setPlatformMetadataURI(string calldata _platformMetadataURI)
         external
-        onlyRoleMember(METADATA_MANAGER_ROLE)
+        onlyRoleMember(METADATA_MANAGER_ROLE, _msgSender())
     {
-        platformMetadataDigest = _platformMetadataDigest;
-        IObservability(o11y).emitPlatformMetadataDigestSet(
-            _platformMetadataDigest
-        );
+        platformMetadataURI = _platformMetadataURI;
+        IObservability(o11y).emitPlatformMetadataURISet(_platformMetadataURI);
+    }
+
+    /// @notice Set the metadata uri for the platform with support for publishing signatures.
+    function setPlatformMetadataURIWithSig(
+        string calldata _platformMetadataURI,
+        address signer,
+        bytes calldata signature
+    )
+        external
+        onlyRoleMember(METADATA_MANAGER_ROLE, signer)
+        onlyValidSignature(signer, signature)
+    {
+        platformMetadataURI = _platformMetadataURI;
+        IObservability(o11y).emitPlatformMetadataURISet(_platformMetadataURI);
     }
 
     /// > [[[[[[[[[[[ Role Methods ]]]]]]]]]]]
 
-    function setManyRoles(
-        address[] memory accounts,
-        bytes32 role,
-        bool grant
-    ) public {
-        for (uint256 i = 0; i < accounts.length; i++) {
-            if (grant) grantRole(role, accounts[i]);
-            else revokeRole(role, accounts[i]);
+    /// @notice Sets many AccessControl roles. Useful for clients that want to batch role updates.
+    function setManyRoles(RoleRequest[] calldata requests) public {
+        for (uint256 i = 0; i < requests.length; i++) {
+            RoleRequest memory request = requests[i];
+            if (request.grant) grantRole(request.role, request.account);
+            else revokeRole(request.role, request.account);
 
-            IObservability(o11y).emitRoleSet(accounts[i], role, grant);
+            IObservability(o11y).emitRoleSet(
+                request.account,
+                request.role,
+                request.grant
+            );
+        }
+    }
+
+    /// @notice Sets many AccessControl with support for publishing signatures.
+    function setManyRolesWithSig(
+        RoleRequest[] calldata requests,
+        address signer,
+        bytes calldata signature
+    ) public onlyValidSignature(signer, signature) {
+        for (uint256 i = 0; i < requests.length; i++) {
+            RoleRequest memory request = requests[i];
+            if (request.grant) grantRole(request.role, request.account);
+            else revokeRole(request.role, request.account);
+
+            IObservability(o11y).emitRoleSet(
+                request.account,
+                request.role,
+                request.grant
+            );
         }
     }
 
     /// > [[[[[[[[[[[ Internal Functions ]]]]]]]]]]]
 
-    function _addContentDigest(bytes32 digest, address publisher) internal {
-        contentDigestToOwner[digest] = publisher;
+    /// @notice Updates the current content ID then sets content for the content data mapping.
+    function _addContent(string calldata contentURI, address owner)
+        internal
+        returns (uint256 contentId)
+    {
+        contentIdToContentData[_currentContentId] = ContentData({
+            contentURI: contentURI,
+            owner: owner
+        });
+        unchecked {
+            return _currentContentId++;
+        }
     }
 
-    function _removeContentDigest(bytes32 digest) internal {
-        delete contentDigestToOwner[digest];
+    /// @notice Updates the content at a given content ID.
+    function _setContent(uint256 contentId, string calldata contentURI)
+        internal
+    {
+        contentIdToContentData[contentId].contentURI = contentURI;
+    }
+
+    /// > [[[[[[[[[[[ Overrides ]]]]]]]]]]]
+
+    /**
+     * @dev Grants `role` to `account`. Overridden to support observability.
+     *
+     * If `account` had not been already granted `role`, emits a {RoleGranted}
+     * event.
+     *
+     * Requirements:
+     *
+     * - the caller must have ``role``'s admin role.
+     *
+     * May emit a {RoleGranted} event.
+     */
+    function grantRole(bytes32 role, address account)
+        public
+        virtual
+        override(AccessControl, IPlatform)
+        onlyRole(getRoleAdmin(role))
+    {
+        _grantRole(role, account);
+
+        //Overridden to support observability
+        IObservability(o11y).emitRoleSet(account, role, true);
+    }
+
+    /**
+     * @dev Revokes `role` from `account`. Overridden to support observability.
+     *
+     * If `account` had been granted `role`, emits a {RoleRevoked} event.
+     *
+     * Requirements:
+     *
+     * - the caller must have ``role``'s admin role.
+     *
+     * May emit a {RoleRevoked} event.
+     */
+    function revokeRole(bytes32 role, address account)
+        public
+        virtual
+        override(AccessControl, IPlatform)
+        onlyRole(getRoleAdmin(role))
+    {
+        _revokeRole(role, account);
+
+        //Overridden to support observability
+        IObservability(o11y).emitRoleSet(account, role, false);
+    }
+
+    /**
+     * @dev Revokes `role` from the calling account. Overridden to support observability.
+     *
+     * Roles are often managed via {grantRole} and {revokeRole}: this function's
+     * purpose is to provide a mechanism for accounts to lose their privileges
+     * if they are compromised (such as when a trusted device is misplaced).
+     *
+     * If the calling account had been revoked `role`, emits a {RoleRevoked}
+     * event.
+     *
+     * Requirements:
+     *
+     * - the caller must be `account`.
+     *
+     * May emit a {RoleRevoked} event.
+     */
+    function renounceRole(bytes32 role, address account)
+        public
+        virtual
+        override(AccessControl)
+    {
+        require(
+            account == _msgSender(),
+            "AccessControl: can only renounce roles for self"
+        );
+
+        _revokeRole(role, account);
+
+        //Overridden to support observability
+        IObservability(o11y).emitRoleSet(account, role, false);
     }
 
     /**
      * @notice Use this method the contract anywhere instead of msg.sender to support relayed transactions.
+     * @dev Overridden due to conflict with AccessControl _msgSender.
      * @return ret The real sender of this call.
      * For a call that came through the Forwarder the real sender is extracted from the last 20 bytes of the `msg.data`.
      * Otherwise simply returns `msg.sender`.

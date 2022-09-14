@@ -29,7 +29,7 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
         o11y = address(new Observability());
 
         // Deploy and store implementation contract.
-        implementation = address(new Platform(address(this), o11y, forwarder));
+        implementation = address(new Platform(address(this), o11y));
 
         //Set the forwarder address for GSN
         _setTrustedForwarder(forwarder);
@@ -78,7 +78,7 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
 
     /// > [[[[[[[[[[[ Deployment functions ]]]]]]]]]]]
 
-    /// @notice Deploy a new writing edition clone with the sender as the owner.
+    /// @notice Deploy a new platform clone with the sender as the owner.
     /// @param platform platform parameters used to deploy the clone.
     function create(Platform.PlatformData memory platform)
         external
@@ -96,10 +96,10 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
             keccak256(
                 abi.encode(
                     owner,
-                    platform.platformMetadataDigest,
+                    platform.platformMetadataURI,
                     platform.publishers,
                     platform.metadataManagers,
-                    platform.initalContent,
+                    platform.initalContentURIs,
                     platform.nonce
                 )
             );
@@ -115,19 +115,19 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
             keccak256(
                 abi.encode(
                     owner,
-                    platform.platformMetadataDigest,
+                    platform.platformMetadataURI,
                     platform.publishers,
                     platform.metadataManagers,
-                    platform.initalContent,
+                    platform.initalContentURIs,
                     platform.nonce
                 )
             )
         );
 
-        // Initialize clone.
-        Platform(clone).initialize(owner, platform);
-
         IObservability(o11y).emitDeploymentEvent(owner, clone);
+
+        // Initialize clone.
+        Platform(clone).initialize(owner, getTrustedForwarder(), platform);
     }
 
     /**

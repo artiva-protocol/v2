@@ -11,14 +11,24 @@ contract ArtivaPaymaster is Ownable, BasePaymaster {
 
     /// > [[[[[[[[[[[ Constructor ]]]]]]]]]]]
 
-    constructor(address _signer) {
+    constructor(address _signer, address[] memory initalTargets) {
         signer = _signer;
+        setManyTargets(initalTargets, true);
     }
 
     /// > [[[[[[[[[[[ Target functions ]]]]]]]]]]]
 
     function setTarget(address target, bool allowed) public onlyOwner {
         allowedTarget[target] = allowed;
+    }
+
+    function setManyTargets(address[] memory target, bool allowed)
+        public
+        onlyOwner
+    {
+        for (uint256 i; i < target.length; i++) {
+            allowedTarget[target[i]] = allowed;
+        }
     }
 
     /// > [[[[[[[[[[[ GSN functions ]]]]]]]]]]]

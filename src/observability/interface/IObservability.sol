@@ -18,18 +18,14 @@ interface IObservabilityEvents {
 
     /// > [[[[[[[[[[[ Clone events ]]]]]]]]]]]
 
-    event ContentDigestAdded(
+    event ContentSet(
         address indexed clone,
-        bytes32 indexed digest,
+        uint256 indexed contentId,
+        string contentURI,
         address indexed owner
     );
 
-    event ContentDigestRemoved(address indexed clone, bytes32 indexed digest);
-
-    event PlatformMetadataDigestSet(
-        address indexed clone,
-        bytes32 indexed platformMetadataDigest
-    );
+    event PlatformMetadataURISet(address indexed clone, string metadataURI);
 
     event RoleSet(
         address indexed clone,
@@ -47,12 +43,13 @@ interface IObservability {
         address newImplementation
     ) external;
 
-    function emitContentDigestAdded(bytes32 digest, address owner) external;
+    function emitContentSet(
+        uint256 contentId,
+        string calldata contentURI,
+        address owner
+    ) external;
 
-    function emitContentDigestRemoved(bytes32 digest) external;
-
-    function emitPlatformMetadataDigestSet(bytes32 platformMetadataDigest)
-        external;
+    function emitPlatformMetadataURISet(string calldata metadataURI) external;
 
     function emitRoleSet(
         address account,

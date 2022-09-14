@@ -9,19 +9,27 @@ import "@opengsn/contracts/src/forwarder/Forwarder.sol";
 contract PlatformTest is Test {
     Platform public platform;
     address factory = address(1);
-    address owner = address(2);
+
+    address owner;
+    uint256 internal ownerPrivateKey;
+
+    address fowarder;
     address publisher = address(3);
     address otherPublisher = address(4);
     address metadataManager = address(5);
     address otherMetadataManager = address(6);
     address unauthorizedAccount = address(7);
-    bytes32 sampleDigest = "W7_vCzkbZ_IJE9fsdoE4-trgeYpiWsds";
-    bytes32 otherSampleDigest = "B8_vCzkbZ_IJE9fsdoE4-trgeYpiWsds";
+
+    string sampleContent = "http://testcontent.com/post/1";
 
     function setUp() public {
         address o11y = address(new Observability());
-        address fowarder = address(new Forwarder());
-        platform = new Platform(factory, o11y, fowarder);
+        fowarder = address(new Forwarder());
+
+        ownerPrivateKey = 0xA11CE;
+        owner = vm.addr(ownerPrivateKey);
+
+        platform = new Platform(factory, o11y);
     }
 
     /// > [[[[[[[[[[[ Initializing ]]]]]]]]]]]
@@ -32,19 +40,19 @@ contract PlatformTest is Test {
 
     function testRevert_InitlizerNotFactory() public {
         vm.expectRevert("NOT_FACTORY");
-        platform.initialize(owner, getInitalPlatformData());
+        platform.initialize(owner, fowarder, getInitalPlatformData());
     }
 
     /// > [[[[[[[[[[[ Content Methods ]]]]]]]]]]]
 
-    function test_AddContentDigestOwner() public {
+    function test_AddContentOwner() public {
         initialize();
 
         vm.prank(owner);
-        platform.addContentDigest(sampleDigest, owner);
+        platform.addContent(sampleContent, owner);
     }
 
-    function testAddContentDigestPublisher() public {
+    function test_AddContentPublisher() public {
         initialize();
 
         vm.startPrank(owner);
@@ -52,100 +60,77 @@ contract PlatformTest is Test {
         vm.stopPrank();
 
         vm.startPrank(publisher);
-        platform.addContentDigest(sampleDigest, publisher);
+        platform.addContent(sampleContent, publisher);
         vm.stopPrank();
     }
 
-    function test_AddManyContentDigests() public {
+    function test_SetContentOwner() public {
         initialize();
 
-        bytes32[] memory content = new bytes32[](2);
-        content[0] = sampleDigest;
-        content[1] = otherSampleDigest;
-
         vm.startPrank(owner);
-        platform.addManyContentDigests(content, owner);
+        platform.addContent(sampleContent, owner);
+        platform.setContent(0, sampleContent);
         vm.stopPrank();
     }
 
-    function testRevert_AddContentDigestNotOwnerOrPlatformOwner() public {
-        initialize();
-
-        vm.prank(owner);
-        platform.addContentDigest(sampleDigest, owner);
-
-        vm.prank(unauthorizedAccount);
-        vm.expectRevert("UNAUTHORIZED_CALLER");
-        platform.addContentDigest(sampleDigest, unauthorizedAccount);
-    }
-
-    function testRevert_AddContentDigestAlreadyPublished() public {
+    function test_SetContentPublisher() public {
         initialize();
 
         vm.startPrank(owner);
-        platform.addContentDigest(sampleDigest, owner);
         platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
+        vm.stopPrank();
+
+        vm.startPrank(publisher);
+        platform.addContent(sampleContent, publisher);
+        platform.setContent(0, sampleContent);
+        vm.stopPrank();
+    }
+
+    function testRevert_SetContentOwnerSettingForAnother() public {
+        initialize();
+
+        vm.startPrank(owner);
+        platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
+        platform.addContent(sampleContent, publisher);
         vm.stopPrank();
 
         vm.prank(publisher);
-        vm.expectRevert("DIGEST_ALREADY_PUBLISHED");
-        platform.addContentDigest(sampleDigest, publisher);
+        platform.setContent(0, sampleContent);
     }
 
-    function test_RemoveContentDigestOwner() public {
+    function testRevert_AddContentNotAuthorized() public {
         initialize();
 
-        vm.startPrank(owner);
-        platform.addContentDigest(sampleDigest, owner);
-
-        platform.removeContentDigest(sampleDigest);
-        vm.stopPrank();
+        vm.expectRevert("UNAUTHORIZED_CALLER");
+        platform.addContent(sampleContent, owner);
     }
 
-    function test_RemoveContentDigestPublisher() public {
+    function testRevert_SetContentNotAuthorized() public {
+        initialize();
+
+        vm.expectRevert("UNAUTHORIZED_CALLER");
+        platform.setContent(0, sampleContent);
+    }
+
+    function testRevert_SetContentNoOwner() public {
+        initialize();
+
+        vm.expectRevert("NO_OWNER");
+        vm.prank(owner);
+        platform.setContent(0, sampleContent);
+    }
+
+    function testRevert_SetContentSenderNotOwner() public {
         initialize();
 
         vm.startPrank(owner);
         platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
+        platform.addContent(sampleContent, owner);
         vm.stopPrank();
 
-        vm.startPrank(publisher);
-        platform.addContentDigest(sampleDigest, publisher);
-
-        platform.removeContentDigest(sampleDigest);
-        vm.stopPrank();
-    }
-
-    function test_RemoveManyContentDigests() public {
-        initialize();
-
-        bytes32[] memory content = new bytes32[](2);
-        content[0] = sampleDigest;
-        content[1] = otherSampleDigest;
-
-        vm.startPrank(owner);
-        platform.addManyContentDigests(content, owner);
-
-        platform.removeManyContentDigests(content);
-        vm.stopPrank();
-    }
-
-    function testRevert_RemoveContentDigestNotOwnerOrPlatformOwner() public {
-        initialize();
-
-        vm.prank(owner);
-        platform.addContentDigest(sampleDigest, owner);
-
-        vm.expectRevert("NOT_DIGEST_OWNER");
-        platform.removeContentDigest(sampleDigest);
-    }
-
-    function testRevert_RemoveContentDigestNotPublished() public {
-        initialize();
-
-        vm.prank(owner);
-        vm.expectRevert("NOT_DIGEST_OWNER");
-        platform.removeContentDigest(sampleDigest);
+        vm.expectRevert("SENDER_NOT_OWNER");
+        vm.prank(publisher);
+        platform.setContent(0, sampleContent);
     }
 
     /// > [[[[[[[[[[[ Platform Metadata Methods ]]]]]]]]]]]
@@ -154,7 +139,7 @@ contract PlatformTest is Test {
         initialize();
 
         vm.prank(owner);
-        platform.setPlatformMetadataDigest(sampleDigest);
+        platform.setPlatformMetadataURI(sampleContent);
     }
 
     function test_SetPlatformMetadataDigestMetadataManager() public {
@@ -165,22 +150,117 @@ contract PlatformTest is Test {
         vm.stopPrank();
 
         vm.startPrank(metadataManager);
-        platform.setPlatformMetadataDigest(sampleDigest);
+        platform.setPlatformMetadataURI(sampleContent);
         vm.stopPrank();
     }
 
-    function testRevert_SetPlatformMetadataNotMetadataManagerOrOwner() public {
+    function testRevert_SetPlatformMetadataNotAuthorized() public {
         initialize();
         vm.prank(unauthorizedAccount);
         vm.expectRevert("UNAUTHORIZED_CALLER");
-        platform.setPlatformMetadataDigest(sampleDigest);
+        platform.setPlatformMetadataURI(sampleContent);
+    }
+
+    /// > [[[[[[[[[[[ Role Methods ]]]]]]]]]]]
+
+    function test_SetManyRoles() public {
+        initialize();
+
+        IPlatform.RoleRequest[] memory roles = new IPlatform.RoleRequest[](4);
+
+        roles[0] = IPlatform.RoleRequest({
+            account: otherPublisher,
+            role: platform.CONTENT_PUBLISHER_ROLE(),
+            grant: true
+        });
+
+        roles[1] = IPlatform.RoleRequest({
+            account: otherMetadataManager,
+            role: platform.METADATA_MANAGER_ROLE(),
+            grant: true
+        });
+
+        roles[2] = IPlatform.RoleRequest({
+            account: publisher,
+            role: platform.CONTENT_PUBLISHER_ROLE(),
+            grant: false
+        });
+
+        roles[3] = IPlatform.RoleRequest({
+            account: metadataManager,
+            role: platform.METADATA_MANAGER_ROLE(),
+            grant: false
+        });
+
+        vm.prank(owner);
+        platform.setManyRoles(roles);
+
+        require(
+            platform.hasRole(platform.CONTENT_PUBLISHER_ROLE(), otherPublisher)
+        );
+
+        require(
+            platform.hasRole(
+                platform.METADATA_MANAGER_ROLE(),
+                otherMetadataManager
+            )
+        );
+
+        require(
+            !platform.hasRole(platform.CONTENT_PUBLISHER_ROLE(), publisher)
+        );
+
+        require(
+            !platform.hasRole(platform.METADATA_MANAGER_ROLE(), metadataManager)
+        );
+    }
+
+    /// > [[[[[[[[[[[ Signature Methods ]]]]]]]]]]]
+
+    function test_AddContentWithSig() public {
+        initialize();
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            ownerPrivateKey,
+            platform.getSigningMessage(owner)
+        );
+
+        platform.addContentWithSig(
+            sampleContent,
+            address(20),
+            owner,
+            abi.encodePacked(r, s, v)
+        );
+    }
+
+    function test_SetContentWithSig() public {
+        initialize();
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            ownerPrivateKey,
+            platform.getSigningMessage(owner)
+        );
+
+        platform.addContentWithSig(
+            sampleContent,
+            owner,
+            owner,
+            abi.encodePacked(r, s, v)
+        );
+
+        platform.setContentWithSig(
+            0,
+            sampleContent,
+            owner,
+            abi.encodePacked(r, s, v)
+        );
     }
 
     /// > [[[[[[[[[[[ Internal Functions ]]]]]]]]]]]
 
     function initialize() internal {
         vm.prank(factory);
-        platform.initialize(owner, getInitalPlatformData());
+        platform.initialize(owner, fowarder, getInitalPlatformData());
     }
 
     function getInitalPlatformData()
@@ -196,10 +276,10 @@ contract PlatformTest is Test {
 
         return
             IPlatform.PlatformData({
-                platformMetadataDigest: "",
+                platformMetadataURI: sampleContent,
                 publishers: publishers,
                 metadataManagers: managers,
-                initalContent: new bytes32[](0),
+                initalContentURIs: new string[](0),
                 nonce: 0
             });
     }

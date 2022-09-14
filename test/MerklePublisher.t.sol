@@ -18,6 +18,8 @@ contract MerklePublisherTest is Test {
     MerklePublisher publisher;
     Platform platform;
 
+    /*
+
     function setUp() public {
         address o11y = address(new Observability());
         address fowarder = address(new Forwarder());
@@ -56,4 +58,5 @@ contract MerklePublisherTest is Test {
             sampleLeavesDigest
         );
     }
+    */
 }

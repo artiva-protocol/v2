@@ -9,7 +9,7 @@ import "@opengsn/contracts/src/ERC2771Recipient.sol";
 
 contract MerklePublisher is IMerklePublisher, ERC2771Recipient {
     mapping(address => bytes32) public platformToMerkleRoot;
-    mapping(address => bytes32) public platformToLeavesDigest;
+    mapping(address => string) public platformToLeavesURI;
 
     /// > [[[[[[[[[[[ Merkle root functions ]]]]]]]]]]]
 
@@ -20,7 +20,7 @@ contract MerklePublisher is IMerklePublisher, ERC2771Recipient {
     function setMerkleRoot(
         address platform,
         bytes32 merkleRoot,
-        bytes32 leavesDigest
+        string calldata leavesURI
     ) external {
         require(
             IAccessControl(platform).hasRole(
@@ -30,7 +30,7 @@ contract MerklePublisher is IMerklePublisher, ERC2771Recipient {
             "MerklePublisher: NOT_AUTHORIZED"
         );
         platformToMerkleRoot[platform] = merkleRoot;
-        platformToLeavesDigest[platform] = leavesDigest;
+        platformToLeavesURI[platform] = leavesURI;
     }
 
     /// > [[[[[[[[[[[ Publish functions ]]]]]]]]]]]
@@ -38,10 +38,10 @@ contract MerklePublisher is IMerklePublisher, ERC2771Recipient {
     function publish(
         address platform,
         bytes32[] calldata proof,
-        bytes32 contentDigest
+        string calldata contentURI
     ) external {
         _verifyMerkleRoot(_msgSender(), proof, platform);
-        IPlatform(platform).addContentDigest(contentDigest, _msgSender());
+        IPlatform(platform).addContent(contentURI, _msgSender());
     }
 
     /// > [[[[[[[[[[[ Internal functions ]]]]]]]]]]]

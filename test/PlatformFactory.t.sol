@@ -44,10 +44,10 @@ contract PlatformTest is Test {
 
         return
             IPlatform.PlatformData({
-                platformMetadataDigest: "",
+                platformMetadataURI: "",
                 publishers: publishers,
                 metadataManagers: managers,
-                initalContent: new bytes32[](0),
+                initalContentURIs: new string[](0),
                 nonce: 0
             });
     }

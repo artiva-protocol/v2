@@ -3,11 +3,29 @@ pragma solidity ^0.8.13;
 
 interface IPlatform {
     struct PlatformData {
-        bytes32 platformMetadataDigest;
+        string platformMetadataURI;
         address[] publishers;
         address[] metadataManagers;
-        bytes32[] initalContent;
+        string[] initalContentURIs;
         uint256 nonce;
+    }
+
+    struct ContentData {
+        string contentURI;
+        address owner;
+    }
+
+    struct PublishAuthorization {
+        string message;
+        address platform;
+        address publishingKey;
+        uint256 nonce;
+    }
+
+    struct RoleRequest {
+        address account;
+        bytes32 role;
+        bool grant;
     }
 
     function CONTENT_PUBLISHER_ROLE() external view returns (bytes32);
@@ -22,5 +40,16 @@ interface IPlatform {
 
     function getDefaultAdminRole() external view returns (bytes32);
 
-    function addContentDigest(bytes32 _digest, address owner) external;
+    function addContent(string calldata contentURI, address owner) external;
+
+    function setContent(uint256 contentId, string calldata contentURI) external;
+
+    function setPlatformMetadataURI(string calldata _platformMetadataURI)
+        external;
+
+    function grantRole(bytes32 role, address account) external;
+
+    function revokeRole(bytes32 role, address account) external;
+
+    function getSigningMessage(address signer) external view returns (bytes32);
 }
