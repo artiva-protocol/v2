@@ -13,12 +13,14 @@ contract PlatformTest is Test {
     address owner;
     uint256 internal ownerPrivateKey;
 
+    address unauthorizedAccount;
+    uint256 internal unauthorizedAccountPrivateKey;
+
     address fowarder;
     address publisher = address(3);
     address otherPublisher = address(4);
     address metadataManager = address(5);
     address otherMetadataManager = address(6);
-    address unauthorizedAccount = address(7);
 
     string sampleContent = "http://testcontent.com/post/1";
 
@@ -28,6 +30,9 @@ contract PlatformTest is Test {
 
         ownerPrivateKey = 0xA11CE;
         owner = vm.addr(ownerPrivateKey);
+
+        unauthorizedAccountPrivateKey = 0xF11CE;
+        unauthorizedAccount = vm.addr(unauthorizedAccountPrivateKey);
 
         platform = new Platform(factory, o11y);
     }
@@ -101,14 +106,14 @@ contract PlatformTest is Test {
     function testRevert_AddContentNotAuthorized() public {
         initialize();
 
-        vm.expectRevert("UNAUTHORIZED_CALLER");
+        vm.expectRevert("UNAUTHORIZED_ACCOUNT");
         platform.addContent(sampleContent, owner);
     }
 
     function testRevert_SetContentNotAuthorized() public {
         initialize();
 
-        vm.expectRevert("UNAUTHORIZED_CALLER");
+        vm.expectRevert("UNAUTHORIZED_ACCOUNT");
         platform.setContent(0, sampleContent);
     }
 
@@ -157,7 +162,7 @@ contract PlatformTest is Test {
     function testRevert_SetPlatformMetadataNotAuthorized() public {
         initialize();
         vm.prank(unauthorizedAccount);
-        vm.expectRevert("UNAUTHORIZED_CALLER");
+        vm.expectRevert("UNAUTHORIZED_ACCOUNT");
         platform.setPlatformMetadataURI(sampleContent);
     }
 
@@ -252,6 +257,176 @@ contract PlatformTest is Test {
             0,
             sampleContent,
             owner,
+            abi.encodePacked(r, s, v)
+        );
+    }
+
+    function test_SetPlatformMetadataURIWithSig() public {
+        initialize();
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            ownerPrivateKey,
+            platform.getSigningMessage(owner)
+        );
+
+        platform.setPlatformMetadataURIWithSig(
+            sampleContent,
+            owner,
+            abi.encodePacked(r, s, v)
+        );
+    }
+
+    function test_SetManyRolesWithSig() public {
+        initialize();
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            ownerPrivateKey,
+            platform.getSigningMessage(owner)
+        );
+
+        IPlatform.RoleRequest[] memory roles = new IPlatform.RoleRequest[](4);
+
+        roles[0] = IPlatform.RoleRequest({
+            account: otherPublisher,
+            role: platform.CONTENT_PUBLISHER_ROLE(),
+            grant: true
+        });
+
+        roles[1] = IPlatform.RoleRequest({
+            account: otherMetadataManager,
+            role: platform.METADATA_MANAGER_ROLE(),
+            grant: true
+        });
+
+        roles[2] = IPlatform.RoleRequest({
+            account: publisher,
+            role: platform.CONTENT_PUBLISHER_ROLE(),
+            grant: false
+        });
+
+        roles[3] = IPlatform.RoleRequest({
+            account: metadataManager,
+            role: platform.METADATA_MANAGER_ROLE(),
+            grant: false
+        });
+
+        platform.setManyRolesWithSig(roles, owner, abi.encodePacked(r, s, v));
+
+        require(
+            platform.hasRole(platform.CONTENT_PUBLISHER_ROLE(), otherPublisher)
+        );
+
+        require(
+            platform.hasRole(
+                platform.METADATA_MANAGER_ROLE(),
+                otherMetadataManager
+            )
+        );
+
+        require(
+            !platform.hasRole(platform.CONTENT_PUBLISHER_ROLE(), publisher)
+        );
+
+        require(
+            !platform.hasRole(platform.METADATA_MANAGER_ROLE(), metadataManager)
+        );
+    }
+
+    function testRevert_AddContentWithSigBumpNonce() public {
+        initialize();
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            ownerPrivateKey,
+            platform.getSigningMessage(owner)
+        );
+
+        vm.prank(owner);
+        platform.setSignatureNonce(1);
+
+        vm.expectRevert("UNATHORIZED_SIGNATURE");
+        platform.addContentWithSig(
+            sampleContent,
+            address(20),
+            owner,
+            abi.encodePacked(r, s, v)
+        );
+    }
+
+    function testRevert_AddContentWithSigUnathorizedCaller() public {
+        initialize();
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            unauthorizedAccountPrivateKey,
+            platform.getSigningMessage(unauthorizedAccount)
+        );
+
+        vm.expectRevert("UNAUTHORIZED_ACCOUNT");
+        platform.addContentWithSig(
+            sampleContent,
+            address(20),
+            unauthorizedAccount,
+            abi.encodePacked(r, s, v)
+        );
+    }
+
+    function testRevert_SetContentWithSigUnathorizedCaller() public {
+        initialize();
+
+        vm.prank(owner);
+        platform.addContent(sampleContent, owner);
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            unauthorizedAccountPrivateKey,
+            platform.getSigningMessage(unauthorizedAccount)
+        );
+
+        vm.expectRevert("UNAUTHORIZED_ACCOUNT");
+        platform.setContentWithSig(
+            0,
+            sampleContent,
+            unauthorizedAccount,
+            abi.encodePacked(r, s, v)
+        );
+    }
+
+    function testRevert_SetPlatformMetadataURIWithSigUnathorizedCaller()
+        public
+    {
+        initialize();
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            unauthorizedAccountPrivateKey,
+            platform.getSigningMessage(unauthorizedAccount)
+        );
+
+        vm.expectRevert("UNAUTHORIZED_ACCOUNT");
+        platform.setPlatformMetadataURIWithSig(
+            sampleContent,
+            unauthorizedAccount,
+            abi.encodePacked(r, s, v)
+        );
+    }
+
+    function testRevert_SetManyRolesWithSigUnathorizedSigner() public {
+        initialize();
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            unauthorizedAccountPrivateKey,
+            platform.getSigningMessage(unauthorizedAccount)
+        );
+
+        IPlatform.RoleRequest[] memory roles = new IPlatform.RoleRequest[](1);
+
+        roles[0] = IPlatform.RoleRequest({
+            account: otherPublisher,
+            role: platform.CONTENT_PUBLISHER_ROLE(),
+            grant: true
+        });
+
+        vm.expectRevert("UNAUTHORIZED_ACCOUNT");
+        platform.setManyRolesWithSig(
+            roles,
+            unauthorizedAccount,
             abi.encodePacked(r, s, v)
         );
     }

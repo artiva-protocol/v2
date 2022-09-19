@@ -3,7 +3,6 @@ pragma solidity ^0.8.13;
 
 import "../observability/interface/IObservability.sol";
 import "./interface/IPlatform.sol";
-
 import "../lib/AccessControlERC2771.sol";
 import "@opengsn/contracts/src/ERC2771Recipient.sol";
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
@@ -58,7 +57,7 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
 
     /// @notice Checks if member is in role.
     modifier onlyRoleMember(bytes32 role, address member) {
-        require(hasRole(role, member), "UNAUTHORIZED_CALLER");
+        require(hasRole(role, member), "UNAUTHORIZED_ACCOUNT");
         _;
     }
 
@@ -285,8 +284,14 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
     ) public onlyValidSignature(signer, signature) {
         for (uint256 i = 0; i < requests.length; i++) {
             RoleRequest memory request = requests[i];
-            if (request.grant) grantRole(request.role, request.account);
-            else revokeRole(request.role, request.account);
+
+            require(
+                hasRole(getRoleAdmin(request.role), signer),
+                "UNAUTHORIZED_ACCOUNT"
+            );
+
+            if (request.grant) _grantRole(request.role, request.account);
+            else _revokeRole(request.role, request.account);
 
             IObservability(o11y).emitRoleSet(
                 request.account,

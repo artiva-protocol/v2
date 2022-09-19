@@ -20,12 +20,14 @@
     "test": "forge test",
     "deploy-dev": "forge script script/DeployDev.s.sol:Deploy --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --fork-url http://localhost:8545 --broadcast",
     "deploy-staging": "source .env.staging && forge script script/DeployStaging.s.sol:Deploy --rpc-url $RPC_URL --private-key $PRIVATE_KEY --etherscan-api-key $ETHERSCAN_KEY --verify --broadcast -vv",
+    "clone-staging": "source .env.staging && forge script script/CloneStaging.s.sol:Clone --rpc-url $RPC_URL --private-key $PRIVATE_KEY --etherscan-api-key $ETHERSCAN_KEY --verify --broadcast -vv",
     "sig-staging": "source .env.staging && forge script script/TestSig.s.sol:TestSig --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast -vv",
     "verify-staging": "source .env.staging && forge script script/DeployStaging.s.sol:Deploy --rpc-url $RPC_URL --private-key $PRIVATE_KEY --etherscan-api-key $ETHERSCAN_KEY --verify -vv",
     "deploy-prod": "",
-    "verify": "source .env.staging && forge verify-contract --chain-id 69 --num-of-optimizations 1000000 --constructor-args $(cast abi-encode 'constructor(address,address)' 0xa471C9508Acf13867282f36cfCe5c41D719ab78B 0x7A95fA73250dc53556d264522150A940d4C50238) --compiler-version v0.8.13+commit.fc410830 0x735117197ca0e8b09ffef2fc214dba2776300cca src/platform/PlatformFactory.sol:PlatformFactory $ETHERSCAN_KEY",
-    "verify-check": "source .env.staging && forge verify-check --chain-id 69 v8zclhru2vmrpefmbsbpn14qtz8zzjkmq3xv4drtxnzwtfvbyf $ETHERSCAN_KEY",
-    "typechain": "typechain --target=ethers-v5 'dist/artifacts/*/*.json' --out-dir dist/typechain"
+    "verify": "source .env.staging && forge verify-contract --chain-id 80001 --num-of-optimizations 1000000 --compiler-version v0.8.13+commit.fc410830 0xcef3507a89fe87380586792245f9d52051bfbe54 src/platform/Platform.sol:Platform $ETHERSCAN_KEY",
+    "verify-check": "source .env.staging && forge verify-check --chain-id 80001 fqyqxrqjixaw4fmtrx6u9sn7dhkdzwl8rexjtmcyp8jkiwje1x $ETHERSCAN_KEY",
+    "typechain": "typechain --target=ethers-v5 'dist/artifacts/*/*.json' --out-dir dist/typechain",
+    "sandbox": "source .env.staging && forge script script/Sandbox.s.sol:Sandbox --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast -vv"
   },
   "peerDependencies": {
     "ethers": "^5.6.9"

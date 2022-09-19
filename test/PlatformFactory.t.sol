@@ -34,6 +34,10 @@ contract PlatformTest is Test {
         factory.create(getInitalPlatformData());
     }
 
+    function test_CreateTwo() public {
+        factory.create(getInitalPlatformData());
+    }
+
     function getInitalPlatformData()
         internal
         pure
