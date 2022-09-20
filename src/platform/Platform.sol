@@ -9,12 +9,16 @@ import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract Platform is AccessControl, IPlatform, ERC2771Recipient {
-    /// > [[[[[[[[[[[ Version ]]]]]]]]]]]
+    /*//////////////////////////////////////////////////////////////
+                            Version
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Version.
     uint8 public immutable override VERSION = 1;
 
-    /// > [[[[[[[[[[[ Configuration ]]]]]]]]]]]
+    /*//////////////////////////////////////////////////////////////
+                            Addresses
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Address that deploys and initializes clones.
     address public immutable override factory;
@@ -22,8 +26,25 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
     /// @notice Address for Artiva's observability contract.
     address public immutable override o11y;
 
+    /*//////////////////////////////////////////////////////////////
+                            Signature Configuation
+    //////////////////////////////////////////////////////////////*/
+
     /// @notice Domain seperator for typed data
     bytes32 public DOMAIN_SEPARATOR;
+
+    /// @notice Mapping of address to its signature nonce used for publishing with signature.
+    mapping(address => uint256) addressToSignatureNonce;
+
+    /// @notice Typed data struct for publishing authorization
+    bytes32 public immutable PUBLISH_AUTHORIZATION_TYPEHASH =
+        keccak256(
+            "PublishAuthorization(string message,address publishingKey,uint256 nonce)"
+        );
+
+    /*//////////////////////////////////////////////////////////////
+                            Platform State
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice URI of the platform metadata content
     string public platformMetadataURI;
@@ -31,8 +52,12 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
     /// @notice Mapping of content id to its content data.
     mapping(uint256 => ContentData) contentIdToContentData;
 
-    /// @notice Mapping of address to its signature nonce used for publishing with signature.
-    mapping(address => uint256) addressToSignatureNonce;
+    /// @notice Private content id for indexing content
+    uint256 private _currentContentId = 0;
+
+    /*//////////////////////////////////////////////////////////////
+                            Platform Roles
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Content publisher role hash for AccessControl
     bytes32 public immutable override CONTENT_PUBLISHER_ROLE =
@@ -42,18 +67,9 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
     bytes32 public immutable override METADATA_MANAGER_ROLE =
         keccak256("METADATA_MANAGER_ROLE");
 
-    /// @notice Typed data struct for publishing authorization
-    bytes32 public immutable PUBLISH_AUTHORIZATION_TYPEHASH =
-        keccak256(
-            "PublishAuthorization(string message,address publishingKey,uint256 nonce)"
-        );
-
-    /// > [[[[[[[[[[[ Private ]]]]]]]]]]]
-
-    /// @notice Private content id for indexing content
-    uint256 private _currentContentId = 0;
-
-    /// > [[[[[[[[[[[ Modifiers ]]]]]]]]]]]
+    /*//////////////////////////////////////////////////////////////
+                            Modifiers
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Checks if member is in role.
     modifier onlyRoleMember(bytes32 role, address member) {
@@ -74,7 +90,9 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
         _;
     }
 
-    /// > [[[[[[[[[[[ Constructor ]]]]]]]]]]]
+    /*//////////////////////////////////////////////////////////////
+                            Constructor
+    //////////////////////////////////////////////////////////////*/
 
     constructor(address _factory, address _o11y) {
         // Assert not the zero-address.
@@ -90,7 +108,9 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
         o11y = _o11y;
     }
 
-    /// > [[[[[[[[[[[ View Methods ]]]]]]]]]]]
+    /*//////////////////////////////////////////////////////////////
+                            View Methods
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Returns admin role for use in composing contracts.
     function getDefaultAdminRole() external pure returns (bytes32) {
@@ -117,7 +137,9 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
             );
     }
 
-    /// > [[[[[[[[[[[ Initializing ]]]]]]]]]]]
+    /*//////////////////////////////////////////////////////////////
+                            Initilization
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Sets default platform data must be called by factory contract.
     function initialize(
@@ -169,34 +191,14 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
         );
     }
 
-    /// > [[[[[[[[[[[ Nonce Methods ]]]]]]]]]]]
-
-    /// @notice Sets the signature nonce, can be used if a user wants to invalidate their publishing signature.
-    function setSignatureNonce(uint256 nonce) external {
-        addressToSignatureNonce[_msgSender()] = nonce;
-    }
-
-    /// > [[[[[[[[[[[ Content Methods ]]]]]]]]]]]
+    /*//////////////////////////////////////////////////////////////
+                            Content Methods
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Adds content to the platform.
     function addContent(string calldata contentURI, address owner)
         public
         onlyRoleMember(CONTENT_PUBLISHER_ROLE, _msgSender())
-    {
-        uint256 contentId = _addContent(contentURI, owner);
-        IObservability(o11y).emitContentSet(contentId, contentURI, owner);
-    }
-
-    /// @notice Adds content to the platform with support for publishing signatures.
-    function addContentWithSig(
-        string calldata contentURI,
-        address owner,
-        address signer,
-        bytes calldata signature
-    )
-        external
-        onlyRoleMember(CONTENT_PUBLISHER_ROLE, signer)
-        onlyValidSignature(signer, signature)
     {
         uint256 contentId = _addContent(contentURI, owner);
         IObservability(o11y).emitContentSet(contentId, contentURI, owner);
@@ -212,6 +214,62 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
         require(owner == _msgSender(), "SENDER_NOT_OWNER");
 
         _setContent(contentId, contentURI);
+        IObservability(o11y).emitContentSet(contentId, contentURI, owner);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            Metadata Methods
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Set the metadata uri for the platform.
+    function setPlatformMetadataURI(string calldata _platformMetadataURI)
+        external
+        onlyRoleMember(METADATA_MANAGER_ROLE, _msgSender())
+    {
+        platformMetadataURI = _platformMetadataURI;
+        IObservability(o11y).emitPlatformMetadataURISet(_platformMetadataURI);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            Role Methods
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Sets many AccessControl roles. Useful for clients that want to batch role updates.
+    function setManyRoles(RoleRequest[] calldata requests) public {
+        for (uint256 i = 0; i < requests.length; i++) {
+            RoleRequest memory request = requests[i];
+            if (request.grant) grantRole(request.role, request.account);
+            else revokeRole(request.role, request.account);
+
+            IObservability(o11y).emitRoleSet(
+                request.account,
+                request.role,
+                request.grant
+            );
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            Signature Methods
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Sets the signature nonce, can be used if a user wants to invalidate their publishing signature.
+    function setSignatureNonce(uint256 nonce) external {
+        addressToSignatureNonce[_msgSender()] = nonce;
+    }
+
+    /// @notice Adds content to the platform with support for publishing signatures.
+    function addContentWithSig(
+        string calldata contentURI,
+        address owner,
+        address signer,
+        bytes calldata signature
+    )
+        external
+        onlyRoleMember(CONTENT_PUBLISHER_ROLE, signer)
+        onlyValidSignature(signer, signature)
+    {
+        uint256 contentId = _addContent(contentURI, owner);
         IObservability(o11y).emitContentSet(contentId, contentURI, owner);
     }
 
@@ -234,17 +292,6 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
         IObservability(o11y).emitContentSet(contentId, contentURI, owner);
     }
 
-    /// > [[[[[[[[[[[ Platform Metadata Methods ]]]]]]]]]]]
-
-    /// @notice Set the metadata uri for the platform.
-    function setPlatformMetadataURI(string calldata _platformMetadataURI)
-        external
-        onlyRoleMember(METADATA_MANAGER_ROLE, _msgSender())
-    {
-        platformMetadataURI = _platformMetadataURI;
-        IObservability(o11y).emitPlatformMetadataURISet(_platformMetadataURI);
-    }
-
     /// @notice Set the metadata uri for the platform with support for publishing signatures.
     function setPlatformMetadataURIWithSig(
         string calldata _platformMetadataURI,
@@ -257,23 +304,6 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
     {
         platformMetadataURI = _platformMetadataURI;
         IObservability(o11y).emitPlatformMetadataURISet(_platformMetadataURI);
-    }
-
-    /// > [[[[[[[[[[[ Role Methods ]]]]]]]]]]]
-
-    /// @notice Sets many AccessControl roles. Useful for clients that want to batch role updates.
-    function setManyRoles(RoleRequest[] calldata requests) public {
-        for (uint256 i = 0; i < requests.length; i++) {
-            RoleRequest memory request = requests[i];
-            if (request.grant) grantRole(request.role, request.account);
-            else revokeRole(request.role, request.account);
-
-            IObservability(o11y).emitRoleSet(
-                request.account,
-                request.role,
-                request.grant
-            );
-        }
     }
 
     /// @notice Sets many AccessControl with support for publishing signatures.
@@ -301,7 +331,9 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
         }
     }
 
-    /// > [[[[[[[[[[[ Internal Functions ]]]]]]]]]]]
+    /*//////////////////////////////////////////////////////////////
+                            Internal Functions
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Updates the current content ID then sets content for the content data mapping.
     function _addContent(string calldata contentURI, address owner)
@@ -324,7 +356,9 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
         contentIdToContentData[contentId].contentURI = contentURI;
     }
 
-    /// > [[[[[[[[[[[ Overrides ]]]]]]]]]]]
+    /*//////////////////////////////////////////////////////////////
+                            Ovverides
+    //////////////////////////////////////////////////////////////*/
 
     /**
      * @dev Grants `role` to `account`. Overridden to support observability.

@@ -10,7 +10,7 @@ contract Clone is Script {
     address constant OWNER = 0xa471C9508Acf13867282f36cfCe5c41D719ab78B;
     address constant USER = 0x1d14d9e297DfbcE003f5A8EbcF8cBa7fAEe70B91;
     address constant FORWARDER = 0x7A95fA73250dc53556d264522150A940d4C50238;
-    address constant FACTORY = 0x2fDbfC9e292EEc6f782F13Ae5c1fc868848D86Bd;
+    address constant FACTORY = 0x0472ed9954862bd1f54089783f849095af0cca01;
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 

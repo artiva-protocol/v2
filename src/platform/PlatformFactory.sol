@@ -10,18 +10,26 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@opengsn/contracts/src/ERC2771Recipient.sol";
 
 contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
+    /*//////////////////////////////////////////////////////////////
+                            Version
+    //////////////////////////////////////////////////////////////*/
+
     /// @notice Version.
     uint8 public immutable VERSION = 1;
+
+    /*//////////////////////////////////////////////////////////////
+                            Deployments
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Observability contract for data processing.
     address public immutable o11y;
 
-    /// > [[[[[[[[[[[ Deployments ]]]]]]]]]]]
-
     /// @notice platform implementation.
     address public implementation;
 
-    /// > [[[[[[[[[[[ Signature Verification ]]]]]]]]]]]
+    /*//////////////////////////////////////////////////////////////
+                            Constructor
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Deploys observability and implementation contracts, sets fowarder for GSN.
     constructor(address _owner, address forwarder) Ownable(_owner) {
@@ -35,7 +43,9 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
         _setTrustedForwarder(forwarder);
     }
 
-    /// > [[[[[[[[[[[ View functions ]]]]]]]]]]]
+    /*//////////////////////////////////////////////////////////////
+                            View Methods
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Generates the address that a clone will be deployed to.
     /// @param _implementation the WritingEditions address.
@@ -61,7 +71,9 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
         return _getSalt(owner, platform);
     }
 
-    /// > [[[[[[[[[[[ Implementation ]]]]]]]]]]]
+    /*//////////////////////////////////////////////////////////////
+                            Implementation
+    //////////////////////////////////////////////////////////////*/
 
     function setImplementation(address _implementation) external onlyOwner {
         // slither-disable-next-line reentrancy-no-eth
@@ -76,7 +88,9 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
         implementation = _implementation;
     }
 
-    /// > [[[[[[[[[[[ Deployment functions ]]]]]]]]]]]
+    /*//////////////////////////////////////////////////////////////
+                            Deployment functions
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Deploy a new platform clone with the sender as the owner.
     /// @param platform platform parameters used to deploy the clone.
@@ -129,6 +143,10 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
         // Initialize clone.
         Platform(clone).initialize(owner, getTrustedForwarder(), platform);
     }
+
+    /*//////////////////////////////////////////////////////////////
+                            Overrides
+    //////////////////////////////////////////////////////////////*/
 
     /**
      * @notice Use this method the contract anywhere instead of msg.sender to support relayed transactions.
