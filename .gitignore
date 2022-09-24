@@ -4,5 +4,4 @@ node_modules/
 broadcast/
 
 .DS_STORE
-.env
-.env.*
+.env.staging
