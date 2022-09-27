@@ -22,7 +22,7 @@ contract Deploy is Script {
     function run() public {
         vm.startBroadcast();
         PlatformFactory factory = new PlatformFactory(OWNER, FORWARDER);
-        address clone = factory.create(getInitalPlatformData());
+        address clone = deployPlatform(address(factory));
 
         vm.stopBroadcast();
 
@@ -36,14 +36,9 @@ contract Deploy is Script {
         console2.log(clone);
     }
 
-    function getInitalPlatformData()
-        internal
-        pure
-        returns (IPlatform.PlatformData memory)
-    {
+    function deployPlatform(address factory) internal returns (address) {
         address[] memory publishers = new address[](2);
         address[] memory managers = new address[](2);
-        string[] memory initalContentURIs = new string[](0);
 
         publishers[0] = OWNER;
         publishers[1] = USER;
@@ -51,13 +46,6 @@ contract Deploy is Script {
         managers[0] = OWNER;
         managers[1] = USER;
 
-        return
-            IPlatform.PlatformData({
-                platformMetadataURI: "",
-                publishers: publishers,
-                metadataManagers: managers,
-                initalContentURIs: initalContentURIs,
-                nonce: 0
-            });
+        return PlatformFactory(factory).create("", publishers, managers, 0);
     }
 }

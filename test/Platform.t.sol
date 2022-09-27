@@ -454,7 +454,6 @@ contract PlatformTest is Test {
                 platformMetadataURI: sampleContent,
                 publishers: publishers,
                 metadataManagers: managers,
-                initalContentURIs: new string[](0),
                 nonce: 0
             });
     }

@@ -6,7 +6,6 @@ interface IPlatform {
         string platformMetadataURI;
         address[] publishers;
         address[] metadataManagers;
-        string[] initalContentURIs;
         uint256 nonce;
     }
 

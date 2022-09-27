@@ -31,28 +31,13 @@ contract PlatformTest is Test {
     }
 
     function test_Create() public {
-        factory.create(getInitalPlatformData());
+        createPlatform();
     }
 
-    function test_CreateTwo() public {
-        factory.create(getInitalPlatformData());
-    }
-
-    function getInitalPlatformData()
-        internal
-        pure
-        returns (IPlatform.PlatformData memory)
-    {
+    function createPlatform() internal {
         address[] memory publishers = new address[](1);
         address[] memory managers = new address[](1);
 
-        return
-            IPlatform.PlatformData({
-                platformMetadataURI: "",
-                publishers: publishers,
-                metadataManagers: managers,
-                initalContentURIs: new string[](0),
-                nonce: 0
-            });
+        factory.create("", publishers, managers, 0);
     }
 }

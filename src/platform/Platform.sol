@@ -172,6 +172,10 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
             );
         }
 
+        /// > [[[[[[[[[[[ Platform metadata ]]]]]]]]]]]
+
+        platformMetadataURI = platform.platformMetadataURI;
+
         /// > [[[[[[[[[[[ GSN ]]]]]]]]]]]
 
         require(forwarder != address(0), "MUST_SET_FORWARDER");

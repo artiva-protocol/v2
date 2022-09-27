@@ -93,12 +93,21 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Deploy a new platform clone with the sender as the owner.
-    /// @param platform platform parameters used to deploy the clone.
-    function create(Platform.PlatformData memory platform)
-        external
-        returns (address clone)
-    {
-        clone = _deployCloneAndInitialize(_msgSender(), platform);
+    function create(
+        string calldata platformMetadataURI,
+        address[] calldata publishers,
+        address[] calldata metadataManagers,
+        uint256 nonce
+    ) external returns (address clone) {
+        clone = _deployCloneAndInitialize(
+            _msgSender(),
+            IPlatform.PlatformData({
+                platformMetadataURI: platformMetadataURI,
+                publishers: publishers,
+                metadataManagers: metadataManagers,
+                nonce: nonce
+            })
+        );
     }
 
     function _getSalt(address owner, Platform.PlatformData memory platform)
@@ -113,7 +122,6 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
                     platform.platformMetadataURI,
                     platform.publishers,
                     platform.metadataManagers,
-                    platform.initalContentURIs,
                     platform.nonce
                 )
             );
@@ -132,7 +140,6 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
                     platform.platformMetadataURI,
                     platform.publishers,
                     platform.metadataManagers,
-                    platform.initalContentURIs,
                     platform.nonce
                 )
             )
