@@ -20,8 +20,8 @@ interface IObservabilityEvents {
 
     event ContentSet(
         address indexed clone,
-        uint256 indexed contentId,
-        string contentURI,
+        uint256 indexed bundleId,
+        string bundleJSON,
         address indexed owner
     );
 
@@ -44,8 +44,8 @@ interface IObservability {
     ) external;
 
     function emitContentSet(
-        uint256 contentId,
-        string calldata contentURI,
+        uint256 bundleId,
+        string calldata bundleJSON,
         address owner
     ) external;
 

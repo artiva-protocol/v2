@@ -8,15 +8,14 @@ import "forge-std/console2.sol";
 
 contract AddContent is Script {
     address constant OWNER = 0xa471C9508Acf13867282f36cfCe5c41D719ab78B;
-    address user = 0x04bfb0034F24E424489F566f32D1f57647469f9E;
-    address clone = 0x29aBA49Ec49a070D5143FE93Fa0f6145a7Ab7CA8;
-    string content = "https://www.google2.com";
+    address constant CLONE = 0x95060Cc429e7A61f8302D1B63ed5c4087Ae397b7;
+    string content =
+        '[{"id":"ETHEREUM:700:7","contentJSON":"{ contract: 700 id: 7}"},{"id":"ETHEREUM:800:8","contentJSON":"{ conttract: 800 id: 8}","type":"nft"}]';
 
     function run() public {
         vm.startBroadcast();
-
-        //IPlatform(clone).addContent(content, OWNER);
-        IPlatform(clone).setContent(1, content);
+        //IPlatform(CLONE).addContent(content, OWNER);
+        IPlatform(CLONE).setContent(0, content);
 
         vm.stopBroadcast();
     }

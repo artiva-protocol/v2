@@ -9,8 +9,8 @@ interface IPlatform {
         uint256 nonce;
     }
 
-    struct ContentData {
-        string contentURI;
+    struct BundleData {
+        bytes32 contentHash;
         address owner;
     }
 
