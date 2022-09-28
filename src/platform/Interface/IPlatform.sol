@@ -3,14 +3,14 @@ pragma solidity ^0.8.13;
 
 interface IPlatform {
     struct PlatformData {
-        string platformMetadataURI;
+        string platformMetadataJSON;
         address[] publishers;
         address[] metadataManagers;
         uint256 nonce;
     }
 
-    struct ContentData {
-        string contentURI;
+    struct BundleData {
+        bytes32 contentHash;
         address owner;
     }
 
@@ -39,11 +39,11 @@ interface IPlatform {
 
     function getDefaultAdminRole() external view returns (bytes32);
 
-    function addContent(string calldata contentURI, address owner) external;
+    function addContent(string calldata bundleJSON, address owner) external;
 
-    function setContent(uint256 contentId, string calldata contentURI) external;
+    function setContent(uint256 bundleId, string calldata bundleJSON) external;
 
-    function setPlatformMetadataURI(string calldata _platformMetadataURI)
+    function setPlatformMetadata(string calldata _platformMetadataJSON)
         external;
 
     function grantRole(bytes32 role, address account) external;

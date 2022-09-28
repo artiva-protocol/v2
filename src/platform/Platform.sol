@@ -46,14 +46,14 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
                             Platform State
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice URI of the platform metadata content
-    string public platformMetadataURI;
+    /// @notice Hash of the platform metadata
+    bytes32 public platformMetadataHash;
 
-    /// @notice Mapping of content id to its content data.
-    mapping(uint256 => ContentData) contentIdToContentData;
+    /// @notice Mapping of bundle id to its bundle data.
+    mapping(uint256 => BundleData) bundleIdToBundleData;
 
-    /// @notice Private content id for indexing content
-    uint256 private _currentContentId = 0;
+    /// @notice Private bundle id for indexing content bundles
+    uint256 private _currentBundleId = 0;
 
     /*//////////////////////////////////////////////////////////////
                             Platform Roles
@@ -174,7 +174,12 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
 
         /// > [[[[[[[[[[[ Platform metadata ]]]]]]]]]]]
 
-        platformMetadataURI = platform.platformMetadataURI;
+        platformMetadataHash = keccak256(
+            abi.encode(platform.platformMetadataJSON)
+        );
+        IObservability(o11y).emitPlatformMetadataSet(
+            platform.platformMetadataJSON
+        );
 
         /// > [[[[[[[[[[[ GSN ]]]]]]]]]]]
 
@@ -199,39 +204,39 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
                             Content Methods
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Adds content to the platform.
-    function addContent(string calldata contentURI, address owner)
+    /// @notice Adds a content bundle to the platform.
+    function addContent(string calldata bundleJSON, address owner)
         public
         onlyRoleMember(CONTENT_PUBLISHER_ROLE, _msgSender())
     {
-        uint256 contentId = _addContent(contentURI, owner);
-        IObservability(o11y).emitContentSet(contentId, contentURI, owner);
+        uint256 bundleId = _addContent(bundleJSON, owner);
+        IObservability(o11y).emitContentSet(bundleId, bundleJSON, owner);
     }
 
-    /// @notice Sets content at a specific content ID. Useful for deleting of updating content.
-    function setContent(uint256 contentId, string calldata contentURI)
+    /// @notice Sets content at a specific bundle ID. Useful for deleting of updating content bundles.
+    function setContent(uint256 bundleId, string calldata bundleJSON)
         public
         onlyRoleMember(CONTENT_PUBLISHER_ROLE, _msgSender())
     {
-        address owner = contentIdToContentData[contentId].owner;
+        address owner = bundleIdToBundleData[bundleId].owner;
         require(owner != address(0), "NO_OWNER");
         require(owner == _msgSender(), "SENDER_NOT_OWNER");
 
-        _setContent(contentId, contentURI);
-        IObservability(o11y).emitContentSet(contentId, contentURI, owner);
+        _setContent(bundleId, bundleJSON);
+        IObservability(o11y).emitContentSet(bundleId, bundleJSON, owner);
     }
 
     /*//////////////////////////////////////////////////////////////
                             Metadata Methods
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Set the metadata uri for the platform.
-    function setPlatformMetadataURI(string calldata _platformMetadataURI)
+    /// @notice Set the metadata for the platform.
+    function setPlatformMetadata(string calldata _platformMetadataJSON)
         external
         onlyRoleMember(METADATA_MANAGER_ROLE, _msgSender())
     {
-        platformMetadataURI = _platformMetadataURI;
-        IObservability(o11y).emitPlatformMetadataURISet(_platformMetadataURI);
+        platformMetadataHash = keccak256(abi.encode(_platformMetadataJSON));
+        IObservability(o11y).emitPlatformMetadataSet(_platformMetadataJSON);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -264,7 +269,7 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
 
     /// @notice Adds content to the platform with support for publishing signatures.
     function addContentWithSig(
-        string calldata contentURI,
+        string calldata bundleJSON,
         address owner,
         address signer,
         bytes calldata signature
@@ -273,14 +278,14 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
         onlyRoleMember(CONTENT_PUBLISHER_ROLE, signer)
         onlyValidSignature(signer, signature)
     {
-        uint256 contentId = _addContent(contentURI, owner);
-        IObservability(o11y).emitContentSet(contentId, contentURI, owner);
+        uint256 bundleId = _addContent(bundleJSON, owner);
+        IObservability(o11y).emitContentSet(bundleId, bundleJSON, owner);
     }
 
     /// @notice Sets content with support for publishing signatures.
     function setContentWithSig(
-        uint256 contentId,
-        string calldata contentURI,
+        uint256 bundleId,
+        string calldata bundleJSON,
         address signer,
         bytes calldata signature
     )
@@ -288,17 +293,17 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
         onlyRoleMember(CONTENT_PUBLISHER_ROLE, signer)
         onlyValidSignature(signer, signature)
     {
-        address owner = contentIdToContentData[contentId].owner;
+        address owner = bundleIdToBundleData[bundleId].owner;
         require(owner != address(0), "NO_OWNER");
         require(owner == signer, "SENDER_NOT_OWNER");
 
-        _setContent(contentId, contentURI);
-        IObservability(o11y).emitContentSet(contentId, contentURI, owner);
+        _setContent(bundleId, bundleJSON);
+        IObservability(o11y).emitContentSet(bundleId, bundleJSON, owner);
     }
 
-    /// @notice Set the metadata uri for the platform with support for publishing signatures.
-    function setPlatformMetadataURIWithSig(
-        string calldata _platformMetadataURI,
+    /// @notice Set the metadata for the platform with support for publishing signatures.
+    function setPlatformMetadataWithSig(
+        string calldata _platformMetadataJSON,
         address signer,
         bytes calldata signature
     )
@@ -306,8 +311,8 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
         onlyRoleMember(METADATA_MANAGER_ROLE, signer)
         onlyValidSignature(signer, signature)
     {
-        platformMetadataURI = _platformMetadataURI;
-        IObservability(o11y).emitPlatformMetadataURISet(_platformMetadataURI);
+        platformMetadataHash = keccak256(abi.encode(_platformMetadataJSON));
+        IObservability(o11y).emitPlatformMetadataSet(_platformMetadataJSON);
     }
 
     /// @notice Sets many AccessControl with support for publishing signatures.
@@ -340,24 +345,26 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Updates the current content ID then sets content for the content data mapping.
-    function _addContent(string calldata contentURI, address owner)
+    function _addContent(string calldata bundleJSON, address owner)
         internal
-        returns (uint256 contentId)
+        returns (uint256 bundleId)
     {
-        contentIdToContentData[_currentContentId] = ContentData({
-            contentURI: contentURI,
+        bundleIdToBundleData[_currentBundleId] = BundleData({
+            contentHash: keccak256(abi.encode(bundleJSON)),
             owner: owner
         });
         unchecked {
-            return _currentContentId++;
+            return _currentBundleId++;
         }
     }
 
     /// @notice Updates the content at a given content ID.
-    function _setContent(uint256 contentId, string calldata contentURI)
+    function _setContent(uint256 bundleId, string calldata bundleJSON)
         internal
     {
-        contentIdToContentData[contentId].contentURI = contentURI;
+        bundleIdToBundleData[bundleId].contentHash = keccak256(
+            abi.encode(bundleJSON)
+        );
     }
 
     /*//////////////////////////////////////////////////////////////

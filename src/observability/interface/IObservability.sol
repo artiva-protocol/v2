@@ -20,12 +20,12 @@ interface IObservabilityEvents {
 
     event ContentSet(
         address indexed clone,
-        uint256 indexed contentId,
-        string contentURI,
+        uint256 indexed bundleId,
+        string bundleJSON,
         address indexed owner
     );
 
-    event PlatformMetadataURISet(address indexed clone, string metadataURI);
+    event PlatformMetadataSet(address indexed clone, string metadataJSON);
 
     event RoleSet(
         address indexed clone,
@@ -44,12 +44,12 @@ interface IObservability {
     ) external;
 
     function emitContentSet(
-        uint256 contentId,
-        string calldata contentURI,
+        uint256 bundleId,
+        string calldata bundleJSON,
         address owner
     ) external;
 
-    function emitPlatformMetadataURISet(string calldata metadataURI) external;
+    function emitPlatformMetadataSet(string calldata metadataJSON) external;
 
     function emitRoleSet(
         address account,
