@@ -46,8 +46,8 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
                             Platform State
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice URI of the platform metadata content
-    string public platformMetadataURI;
+    /// @notice Hash of the platform metadata
+    bytes32 public platformMetadataHash;
 
     /// @notice Mapping of bundle id to its bundle data.
     mapping(uint256 => BundleData) bundleIdToBundleData;
@@ -174,7 +174,12 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
 
         /// > [[[[[[[[[[[ Platform metadata ]]]]]]]]]]]
 
-        platformMetadataURI = platform.platformMetadataURI;
+        platformMetadataHash = keccak256(
+            abi.encode(platform.platformMetadataJSON)
+        );
+        IObservability(o11y).emitPlatformMetadataSet(
+            platform.platformMetadataJSON
+        );
 
         /// > [[[[[[[[[[[ GSN ]]]]]]]]]]]
 
@@ -225,13 +230,13 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
                             Metadata Methods
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Set the metadata uri for the platform.
-    function setPlatformMetadataURI(string calldata _platformMetadataURI)
+    /// @notice Set the metadata for the platform.
+    function setPlatformMetadata(string calldata _platformMetadataJSON)
         external
         onlyRoleMember(METADATA_MANAGER_ROLE, _msgSender())
     {
-        platformMetadataURI = _platformMetadataURI;
-        IObservability(o11y).emitPlatformMetadataURISet(_platformMetadataURI);
+        platformMetadataHash = keccak256(abi.encode(_platformMetadataJSON));
+        IObservability(o11y).emitPlatformMetadataSet(_platformMetadataJSON);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -296,9 +301,9 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
         IObservability(o11y).emitContentSet(bundleId, bundleJSON, owner);
     }
 
-    /// @notice Set the metadata uri for the platform with support for publishing signatures.
-    function setPlatformMetadataURIWithSig(
-        string calldata _platformMetadataURI,
+    /// @notice Set the metadata for the platform with support for publishing signatures.
+    function setPlatformMetadataWithSig(
+        string calldata _platformMetadataJSON,
         address signer,
         bytes calldata signature
     )
@@ -306,8 +311,8 @@ contract Platform is AccessControl, IPlatform, ERC2771Recipient {
         onlyRoleMember(METADATA_MANAGER_ROLE, signer)
         onlyValidSignature(signer, signature)
     {
-        platformMetadataURI = _platformMetadataURI;
-        IObservability(o11y).emitPlatformMetadataURISet(_platformMetadataURI);
+        platformMetadataHash = keccak256(abi.encode(_platformMetadataJSON));
+        IObservability(o11y).emitPlatformMetadataSet(_platformMetadataJSON);
     }
 
     /// @notice Sets many AccessControl with support for publishing signatures.

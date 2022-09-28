@@ -25,7 +25,7 @@ interface IObservabilityEvents {
         address indexed owner
     );
 
-    event PlatformMetadataURISet(address indexed clone, string metadataURI);
+    event PlatformMetadataSet(address indexed clone, string metadataJSON);
 
     event RoleSet(
         address indexed clone,
@@ -49,7 +49,7 @@ interface IObservability {
         address owner
     ) external;
 
-    function emitPlatformMetadataURISet(string calldata metadataURI) external;
+    function emitPlatformMetadataSet(string calldata metadataJSON) external;
 
     function emitRoleSet(
         address account,

@@ -34,11 +34,11 @@ contract Observability is IObservability, IObservabilityEvents {
         emit ContentSet(msg.sender, bundleId, bundleJSON, owner);
     }
 
-    function emitPlatformMetadataURISet(string calldata metadataURI)
+    function emitPlatformMetadataSet(string calldata metadataJSON)
         external
         override
     {
-        emit PlatformMetadataURISet(msg.sender, metadataURI);
+        emit PlatformMetadataSet(msg.sender, metadataJSON);
     }
 
     function emitRoleSet(

@@ -94,7 +94,7 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
 
     /// @notice Deploy a new platform clone with the sender as the owner.
     function create(
-        string calldata platformMetadataURI,
+        string calldata platformMetadataJSON,
         address[] calldata publishers,
         address[] calldata metadataManagers,
         uint256 nonce
@@ -102,7 +102,7 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
         clone = _deployCloneAndInitialize(
             _msgSender(),
             IPlatform.PlatformData({
-                platformMetadataURI: platformMetadataURI,
+                platformMetadataJSON: platformMetadataJSON,
                 publishers: publishers,
                 metadataManagers: metadataManagers,
                 nonce: nonce
@@ -119,7 +119,7 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
             keccak256(
                 abi.encode(
                     owner,
-                    platform.platformMetadataURI,
+                    platform.platformMetadataJSON,
                     platform.publishers,
                     platform.metadataManagers,
                     platform.nonce
@@ -137,7 +137,7 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
             keccak256(
                 abi.encode(
                     owner,
-                    platform.platformMetadataURI,
+                    platform.platformMetadataJSON,
                     platform.publishers,
                     platform.metadataManagers,
                     platform.nonce

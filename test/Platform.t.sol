@@ -144,7 +144,7 @@ contract PlatformTest is Test {
         initialize();
 
         vm.prank(owner);
-        platform.setPlatformMetadataURI(sampleContent);
+        platform.setPlatformMetadata(sampleContent);
     }
 
     function test_SetPlatformMetadataDigestMetadataManager() public {
@@ -155,7 +155,7 @@ contract PlatformTest is Test {
         vm.stopPrank();
 
         vm.startPrank(metadataManager);
-        platform.setPlatformMetadataURI(sampleContent);
+        platform.setPlatformMetadata(sampleContent);
         vm.stopPrank();
     }
 
@@ -163,7 +163,7 @@ contract PlatformTest is Test {
         initialize();
         vm.prank(unauthorizedAccount);
         vm.expectRevert("UNAUTHORIZED_ACCOUNT");
-        platform.setPlatformMetadataURI(sampleContent);
+        platform.setPlatformMetadata(sampleContent);
     }
 
     /// > [[[[[[[[[[[ Role Methods ]]]]]]]]]]]
@@ -261,7 +261,7 @@ contract PlatformTest is Test {
         );
     }
 
-    function test_SetPlatformMetadataURIWithSig() public {
+    function test_SetPlatformMetadataWithSig() public {
         initialize();
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(
@@ -269,7 +269,7 @@ contract PlatformTest is Test {
             platform.getSigningMessage(owner)
         );
 
-        platform.setPlatformMetadataURIWithSig(
+        platform.setPlatformMetadataWithSig(
             sampleContent,
             owner,
             abi.encodePacked(r, s, v)
@@ -389,9 +389,7 @@ contract PlatformTest is Test {
         );
     }
 
-    function testRevert_SetPlatformMetadataURIWithSigUnathorizedCaller()
-        public
-    {
+    function testRevert_SetPlatformMetadataWithSigUnathorizedCaller() public {
         initialize();
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(
@@ -400,7 +398,7 @@ contract PlatformTest is Test {
         );
 
         vm.expectRevert("UNAUTHORIZED_ACCOUNT");
-        platform.setPlatformMetadataURIWithSig(
+        platform.setPlatformMetadataWithSig(
             sampleContent,
             unauthorizedAccount,
             abi.encodePacked(r, s, v)
@@ -451,7 +449,7 @@ contract PlatformTest is Test {
 
         return
             IPlatform.PlatformData({
-                platformMetadataURI: sampleContent,
+                platformMetadataJSON: sampleContent,
                 publishers: publishers,
                 metadataManagers: managers,
                 nonce: 0

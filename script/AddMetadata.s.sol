@@ -8,15 +8,13 @@ import "forge-std/console2.sol";
 
 contract AddMetadata is Script {
     address constant OWNER = 0xa471C9508Acf13867282f36cfCe5c41D719ab78B;
-    address user = 0x04bfb0034F24E424489F566f32D1f57647469f9E;
-    address clone = 0xB792786e3E97B199a1AADed9AeAbD455D977240F;
-    string content = "https://www.google2.com";
+    address clone = 0xe9603B18f135404a77EEb0EC44A8C5A7d68e1892;
+    string content = '{ title: "Test Platform"}';
 
     function run() public {
         vm.startBroadcast();
 
-        //IPlatform(clone).addContent(content, OWNER);
-        IPlatform(clone).setPlatformMetadataURI(content);
+        IPlatform(clone).setPlatformMetadata(content);
 
         vm.stopBroadcast();
     }
