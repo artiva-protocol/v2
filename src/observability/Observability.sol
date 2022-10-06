@@ -27,18 +27,18 @@ contract Observability is IObservability, IObservabilityEvents {
     /// > [[[[[[[[[[[ Clone functions ]]]]]]]]]]]
 
     function emitContentSet(
-        uint256 bundleId,
-        string calldata bundleJSON,
+        uint256 contentId,
+        string calldata content,
         address owner
     ) external override {
-        emit ContentSet(msg.sender, bundleId, bundleJSON, owner);
+        emit ContentSet(msg.sender, contentId, content, owner);
     }
 
-    function emitPlatformMetadataSet(string calldata metadataJSON)
+    function emitPlatformMetadataSet(string calldata metadata)
         external
         override
     {
-        emit PlatformMetadataSet(msg.sender, metadataJSON);
+        emit PlatformMetadataSet(msg.sender, metadata);
     }
 
     function emitRoleSet(

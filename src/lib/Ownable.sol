@@ -59,9 +59,9 @@ abstract contract Ownable is IOwnable, IOwnableEvents {
     function acceptOwnership() external override onlyNextOwner {
         delete nextOwner;
 
-        owner = _msgSender();
+        owner = msg.sender;
 
-        emit OwnershipTransferred(owner, _msgSender());
+        emit OwnershipTransferred(owner, msg.sender);
     }
 
     /// @notice Renounce ownership by setting owner to zero address.
@@ -71,12 +71,12 @@ abstract contract Ownable is IOwnable, IOwnableEvents {
 
     /// @notice Returns true if the caller is the current owner.
     function isOwner() public view override returns (bool) {
-        return _msgSender() == owner;
+        return msg.sender == owner;
     }
 
     /// @notice Returns true if the caller is the next owner.
     function isNextOwner() public view override returns (bool) {
-        return _msgSender() == nextOwner;
+        return msg.sender == nextOwner;
     }
 
     /// > [[[[[[[[[[[ Internal Functions ]]]]]]]]]]]
@@ -96,6 +96,4 @@ abstract contract Ownable is IOwnable, IOwnableEvents {
 
         owner = address(0);
     }
-
-    function _msgSender() internal view virtual returns (address ret);
 }

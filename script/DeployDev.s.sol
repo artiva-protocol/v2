@@ -10,8 +10,7 @@ contract Deploy is Script {
 
     function run() public {
         vm.startBroadcast();
-        address forwarder = address(new Forwarder());
-        new PlatformFactory(OWNER, forwarder);
+        new PlatformFactory(OWNER);
         vm.stopBroadcast();
     }
 }

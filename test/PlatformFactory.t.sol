@@ -16,8 +16,7 @@ contract PlatformTest is Test {
     function setUp() public {
         ownerPrivateKey = 0xA11CE;
         owner = vm.addr(ownerPrivateKey);
-        address fowarder = address(new Forwarder());
-        factory = new PlatformFactory(owner, fowarder);
+        factory = new PlatformFactory(owner);
     }
 
     function test_SetImplementation() public {
@@ -38,6 +37,6 @@ contract PlatformTest is Test {
         address[] memory publishers = new address[](1);
         address[] memory managers = new address[](1);
 
-        factory.create("", publishers, managers, 0);
+        factory.create("", publishers, managers);
     }
 }

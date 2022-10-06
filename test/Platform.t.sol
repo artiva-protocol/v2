@@ -45,7 +45,7 @@ contract PlatformTest is Test {
 
     function testRevert_InitlizerNotFactory() public {
         vm.expectRevert("NOT_FACTORY");
-        platform.initialize(owner, fowarder, getInitalPlatformData());
+        platform.initialize(owner, getInitalPlatformData());
     }
 
     /// > [[[[[[[[[[[ Content Methods ]]]]]]]]]]]
@@ -54,7 +54,10 @@ contract PlatformTest is Test {
         initialize();
 
         vm.prank(owner);
-        platform.addContent(sampleContent, owner);
+        string[] memory content = new string[](1);
+        content[0] = sampleContent;
+
+        platform.addContents(content, owner);
     }
 
     function test_AddContentPublisher() public {
@@ -64,78 +67,138 @@ contract PlatformTest is Test {
         platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
         vm.stopPrank();
 
+        string[] memory content = new string[](1);
+        content[0] = sampleContent;
+
         vm.startPrank(publisher);
-        platform.addContent(sampleContent, publisher);
+        platform.addContents(content, publisher);
         vm.stopPrank();
     }
 
     function test_SetContentOwner() public {
         initialize();
 
+        string[] memory content = new string[](1);
+        content[0] = sampleContent;
+
+        IPlatform.SetContentRequest[]
+            memory reqs = new IPlatform.SetContentRequest[](1);
+        reqs[0] = IPlatform.SetContentRequest({
+            contentId: 0,
+            content: sampleContent
+        });
+
         vm.startPrank(owner);
-        platform.addContent(sampleContent, owner);
-        platform.setContent(0, sampleContent);
+        platform.addContents(content, owner);
+        platform.setContents(reqs);
         vm.stopPrank();
     }
 
     function test_SetContentPublisher() public {
         initialize();
 
+        string[] memory content = new string[](1);
+        content[0] = sampleContent;
+
+        IPlatform.SetContentRequest[]
+            memory reqs = new IPlatform.SetContentRequest[](1);
+        reqs[0] = IPlatform.SetContentRequest({
+            contentId: 0,
+            content: sampleContent
+        });
+
         vm.startPrank(owner);
         platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
         vm.stopPrank();
 
         vm.startPrank(publisher);
-        platform.addContent(sampleContent, publisher);
-        platform.setContent(0, sampleContent);
+        platform.addContents(content, publisher);
+        platform.setContents(reqs);
         vm.stopPrank();
     }
 
     function testRevert_SetContentOwnerSettingForAnother() public {
         initialize();
 
+        string[] memory content = new string[](1);
+        content[0] = sampleContent;
+
+        IPlatform.SetContentRequest[]
+            memory reqs = new IPlatform.SetContentRequest[](1);
+        reqs[0] = IPlatform.SetContentRequest({
+            contentId: 0,
+            content: sampleContent
+        });
+
         vm.startPrank(owner);
         platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
-        platform.addContent(sampleContent, publisher);
+        platform.addContents(content, publisher);
         vm.stopPrank();
 
         vm.prank(publisher);
-        platform.setContent(0, sampleContent);
+        platform.setContents(reqs);
     }
 
     function testRevert_AddContentNotAuthorized() public {
         initialize();
 
+        string[] memory content = new string[](1);
+        content[0] = sampleContent;
+
         vm.expectRevert("UNAUTHORIZED_ACCOUNT");
-        platform.addContent(sampleContent, owner);
+        platform.addContents(content, owner);
     }
 
     function testRevert_SetContentNotAuthorized() public {
         initialize();
 
+        IPlatform.SetContentRequest[]
+            memory reqs = new IPlatform.SetContentRequest[](1);
+        reqs[0] = IPlatform.SetContentRequest({
+            contentId: 0,
+            content: sampleContent
+        });
+
         vm.expectRevert("UNAUTHORIZED_ACCOUNT");
-        platform.setContent(0, sampleContent);
+        platform.setContents(reqs);
     }
 
     function testRevert_SetContentNoOwner() public {
         initialize();
 
+        IPlatform.SetContentRequest[]
+            memory reqs = new IPlatform.SetContentRequest[](1);
+        reqs[0] = IPlatform.SetContentRequest({
+            contentId: 0,
+            content: sampleContent
+        });
+
         vm.expectRevert("NO_OWNER");
         vm.prank(owner);
-        platform.setContent(0, sampleContent);
+        platform.setContents(reqs);
     }
 
     function testRevert_SetContentSenderNotOwner() public {
         initialize();
 
+        string[] memory content = new string[](1);
+        content[0] = sampleContent;
+
+        IPlatform.SetContentRequest[]
+            memory reqs = new IPlatform.SetContentRequest[](1);
+        reqs[0] = IPlatform.SetContentRequest({
+            contentId: 0,
+            content: sampleContent
+        });
+
         vm.startPrank(owner);
         platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
-        platform.addContent(sampleContent, owner);
+        platform.addContents(content, owner);
         vm.stopPrank();
 
         vm.expectRevert("SENDER_NOT_OWNER");
         vm.prank(publisher);
-        platform.setContent(0, sampleContent);
+        platform.setContents(reqs);
     }
 
     /// > [[[[[[[[[[[ Platform Metadata Methods ]]]]]]]]]]]
@@ -220,220 +283,11 @@ contract PlatformTest is Test {
         );
     }
 
-    /// > [[[[[[[[[[[ Signature Methods ]]]]]]]]]]]
-
-    function test_AddContentWithSig() public {
-        initialize();
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            ownerPrivateKey,
-            platform.getSigningMessage(owner)
-        );
-
-        platform.addContentWithSig(
-            sampleContent,
-            address(20),
-            owner,
-            abi.encodePacked(r, s, v)
-        );
-    }
-
-    function test_SetContentWithSig() public {
-        initialize();
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            ownerPrivateKey,
-            platform.getSigningMessage(owner)
-        );
-
-        platform.addContentWithSig(
-            sampleContent,
-            owner,
-            owner,
-            abi.encodePacked(r, s, v)
-        );
-
-        platform.setContentWithSig(
-            0,
-            sampleContent,
-            owner,
-            abi.encodePacked(r, s, v)
-        );
-    }
-
-    function test_SetPlatformMetadataWithSig() public {
-        initialize();
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            ownerPrivateKey,
-            platform.getSigningMessage(owner)
-        );
-
-        platform.setPlatformMetadataWithSig(
-            sampleContent,
-            owner,
-            abi.encodePacked(r, s, v)
-        );
-    }
-
-    function test_SetManyRolesWithSig() public {
-        initialize();
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            ownerPrivateKey,
-            platform.getSigningMessage(owner)
-        );
-
-        IPlatform.RoleRequest[] memory roles = new IPlatform.RoleRequest[](4);
-
-        roles[0] = IPlatform.RoleRequest({
-            account: otherPublisher,
-            role: platform.CONTENT_PUBLISHER_ROLE(),
-            grant: true
-        });
-
-        roles[1] = IPlatform.RoleRequest({
-            account: otherMetadataManager,
-            role: platform.METADATA_MANAGER_ROLE(),
-            grant: true
-        });
-
-        roles[2] = IPlatform.RoleRequest({
-            account: publisher,
-            role: platform.CONTENT_PUBLISHER_ROLE(),
-            grant: false
-        });
-
-        roles[3] = IPlatform.RoleRequest({
-            account: metadataManager,
-            role: platform.METADATA_MANAGER_ROLE(),
-            grant: false
-        });
-
-        platform.setManyRolesWithSig(roles, owner, abi.encodePacked(r, s, v));
-
-        require(
-            platform.hasRole(platform.CONTENT_PUBLISHER_ROLE(), otherPublisher)
-        );
-
-        require(
-            platform.hasRole(
-                platform.METADATA_MANAGER_ROLE(),
-                otherMetadataManager
-            )
-        );
-
-        require(
-            !platform.hasRole(platform.CONTENT_PUBLISHER_ROLE(), publisher)
-        );
-
-        require(
-            !platform.hasRole(platform.METADATA_MANAGER_ROLE(), metadataManager)
-        );
-    }
-
-    function testRevert_AddContentWithSigBumpNonce() public {
-        initialize();
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            ownerPrivateKey,
-            platform.getSigningMessage(owner)
-        );
-
-        vm.prank(owner);
-        platform.setSignatureNonce(1);
-
-        vm.expectRevert("UNATHORIZED_SIGNATURE");
-        platform.addContentWithSig(
-            sampleContent,
-            address(20),
-            owner,
-            abi.encodePacked(r, s, v)
-        );
-    }
-
-    function testRevert_AddContentWithSigUnathorizedCaller() public {
-        initialize();
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            unauthorizedAccountPrivateKey,
-            platform.getSigningMessage(unauthorizedAccount)
-        );
-
-        vm.expectRevert("UNAUTHORIZED_ACCOUNT");
-        platform.addContentWithSig(
-            sampleContent,
-            address(20),
-            unauthorizedAccount,
-            abi.encodePacked(r, s, v)
-        );
-    }
-
-    function testRevert_SetContentWithSigUnathorizedCaller() public {
-        initialize();
-
-        vm.prank(owner);
-        platform.addContent(sampleContent, owner);
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            unauthorizedAccountPrivateKey,
-            platform.getSigningMessage(unauthorizedAccount)
-        );
-
-        vm.expectRevert("UNAUTHORIZED_ACCOUNT");
-        platform.setContentWithSig(
-            0,
-            sampleContent,
-            unauthorizedAccount,
-            abi.encodePacked(r, s, v)
-        );
-    }
-
-    function testRevert_SetPlatformMetadataWithSigUnathorizedCaller() public {
-        initialize();
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            unauthorizedAccountPrivateKey,
-            platform.getSigningMessage(unauthorizedAccount)
-        );
-
-        vm.expectRevert("UNAUTHORIZED_ACCOUNT");
-        platform.setPlatformMetadataWithSig(
-            sampleContent,
-            unauthorizedAccount,
-            abi.encodePacked(r, s, v)
-        );
-    }
-
-    function testRevert_SetManyRolesWithSigUnathorizedSigner() public {
-        initialize();
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            unauthorizedAccountPrivateKey,
-            platform.getSigningMessage(unauthorizedAccount)
-        );
-
-        IPlatform.RoleRequest[] memory roles = new IPlatform.RoleRequest[](1);
-
-        roles[0] = IPlatform.RoleRequest({
-            account: otherPublisher,
-            role: platform.CONTENT_PUBLISHER_ROLE(),
-            grant: true
-        });
-
-        vm.expectRevert("UNAUTHORIZED_ACCOUNT");
-        platform.setManyRolesWithSig(
-            roles,
-            unauthorizedAccount,
-            abi.encodePacked(r, s, v)
-        );
-    }
-
     /// > [[[[[[[[[[[ Internal Functions ]]]]]]]]]]]
 
     function initialize() internal {
         vm.prank(factory);
-        platform.initialize(owner, fowarder, getInitalPlatformData());
+        platform.initialize(owner, getInitalPlatformData());
     }
 
     function getInitalPlatformData()
@@ -449,10 +303,9 @@ contract PlatformTest is Test {
 
         return
             IPlatform.PlatformData({
-                platformMetadataJSON: sampleContent,
+                platformMetadata: sampleContent,
                 publishers: publishers,
-                metadataManagers: managers,
-                nonce: 0
+                metadataManagers: managers
             });
     }
 }

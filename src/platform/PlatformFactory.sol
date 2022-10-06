@@ -3,13 +3,10 @@ pragma solidity ^0.8.0;
 
 import "./Platform.sol";
 import "../observability/Observability.sol";
-import "../lib/OwnableERC2771.sol";
-
+import "../lib/Ownable.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@opengsn/contracts/src/ERC2771Recipient.sol";
 
-contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
+contract PlatformFactory is Ownable {
     /*//////////////////////////////////////////////////////////////
                             Version
     //////////////////////////////////////////////////////////////*/
@@ -32,43 +29,12 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Deploys observability and implementation contracts, sets fowarder for GSN.
-    constructor(address _owner, address forwarder) Ownable(_owner) {
+    constructor(address _owner) Ownable(_owner) {
         // Deploy and store Observability contract.
         o11y = address(new Observability());
 
         // Deploy and store implementation contract.
         implementation = address(new Platform(address(this), o11y));
-
-        //Set the forwarder address for GSN
-        _setTrustedForwarder(forwarder);
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            View Methods
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Generates the address that a clone will be deployed to.
-    /// @param _implementation the WritingEditions address.
-    /// @param salt the entropy used by create2 for generatating a deterministic address.
-    function predictDeterministicAddress(address _implementation, bytes32 salt)
-        external
-        view
-        returns (address)
-    {
-        return
-            Clones.predictDeterministicAddress(
-                _implementation,
-                salt,
-                address(this)
-            );
-    }
-
-    function getSalt(address owner, Platform.PlatformData memory platform)
-        external
-        pure
-        returns (bytes32)
-    {
-        return _getSalt(owner, platform);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -94,37 +60,18 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
 
     /// @notice Deploy a new platform clone with the sender as the owner.
     function create(
-        string calldata platformMetadataJSON,
+        string calldata platformMetadata,
         address[] calldata publishers,
-        address[] calldata metadataManagers,
-        uint256 nonce
+        address[] calldata metadataManagers
     ) external returns (address clone) {
         clone = _deployCloneAndInitialize(
-            _msgSender(),
+            msg.sender,
             IPlatform.PlatformData({
-                platformMetadataJSON: platformMetadataJSON,
+                platformMetadata: platformMetadata,
                 publishers: publishers,
-                metadataManagers: metadataManagers,
-                nonce: nonce
+                metadataManagers: metadataManagers
             })
         );
-    }
-
-    function _getSalt(address owner, Platform.PlatformData memory platform)
-        internal
-        pure
-        returns (bytes32)
-    {
-        return
-            keccak256(
-                abi.encode(
-                    owner,
-                    platform.platformMetadataJSON,
-                    platform.publishers,
-                    platform.metadataManagers,
-                    platform.nonce
-                )
-            );
     }
 
     /// @dev Deploys a clone and calls the initialize function
@@ -132,50 +79,11 @@ contract PlatformFactory is Ownable, ReentrancyGuard, ERC2771Recipient {
         address owner,
         Platform.PlatformData memory platform
     ) internal returns (address clone) {
-        clone = Clones.cloneDeterministic(
-            implementation,
-            keccak256(
-                abi.encode(
-                    owner,
-                    platform.platformMetadataJSON,
-                    platform.publishers,
-                    platform.metadataManagers,
-                    platform.nonce
-                )
-            )
-        );
+        clone = Clones.clone(implementation);
 
         IObservability(o11y).emitDeploymentEvent(owner, clone);
 
         // Initialize clone.
-        Platform(clone).initialize(owner, getTrustedForwarder(), platform);
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            Overrides
-    //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @notice Use this method the contract anywhere instead of msg.sender to support relayed transactions.
-     * @return ret The real sender of this call.
-     * For a call that came through the Forwarder the real sender is extracted from the last 20 bytes of the `msg.data`.
-     * Otherwise simply returns `msg.sender`.
-     */
-    function _msgSender()
-        internal
-        view
-        override(Ownable, ERC2771Recipient)
-        returns (address ret)
-    {
-        if (msg.data.length >= 20 && isTrustedForwarder(msg.sender)) {
-            // At this point we know that the sender is a trusted forwarder,
-            // so we trust that the last bytes of msg.data are the verified sender address.
-            // extract sender address from the end of msg.data
-            assembly {
-                ret := shr(96, calldataload(sub(calldatasize(), 20)))
-            }
-        } else {
-            ret = msg.sender;
-        }
+        Platform(clone).initialize(owner, platform);
     }
 }

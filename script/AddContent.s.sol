@@ -8,14 +8,37 @@ import "forge-std/console2.sol";
 
 contract AddContent is Script {
     address constant OWNER = 0xa471C9508Acf13867282f36cfCe5c41D719ab78B;
-    address constant CLONE = 0xe9603B18f135404a77EEb0EC44A8C5A7d68e1892;
-    string content =
-        '[{"id":"ETHEREUM:700:7","contentJSON":"{ contract: 700 id: 7}"},{"id":"ETHEREUM:800:8","contentJSON":"{ conttract: 800 id: 8}","type":"nft"}]';
+    address constant CLONE = 0x007637cDa7516bC86053a239b04A83AbD72d1d7C;
+    string rawContent =
+        '{"id":"ETHEREUM:1000:8","contentJSON":"{ contract: 1000 id: 8}","type":"nft"}';
+    string rawContent2 =
+        '{"id":"ETHEREUM:2000:8","contentJSON":"{ contract: 2000 id: 8}","type":"nft"}';
 
     function run() public {
         vm.startBroadcast();
-        IPlatform(CLONE).addContent(content, OWNER);
-        //IPlatform(CLONE).setContent(0, content);
+
+        /*
+        string[] memory contents = new string[](2);
+        contents[0] = rawContent;
+        contents[1] = rawContent2;
+
+        IPlatform(CLONE).addContents(contents, OWNER);
+        */
+
+        IPlatform.SetContentRequest[]
+            memory reqs = new IPlatform.SetContentRequest[](2);
+
+        reqs[0] = IPlatform.SetContentRequest({
+            contentId: 0,
+            content: rawContent
+        });
+
+        reqs[1] = IPlatform.SetContentRequest({
+            contentId: 1,
+            content: rawContent2
+        });
+
+        IPlatform(CLONE).setContents(reqs);
 
         vm.stopBroadcast();
     }

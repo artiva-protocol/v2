@@ -8,9 +8,8 @@ import "forge-std/console2.sol";
 
 contract Clone is Script {
     address constant OWNER = 0xa471C9508Acf13867282f36cfCe5c41D719ab78B;
-    address constant USER = 0x1d14d9e297DfbcE003f5A8EbcF8cBa7fAEe70B91;
-    address constant FORWARDER = 0x7A95fA73250dc53556d264522150A940d4C50238;
-    address constant FACTORY = 0xF347cf551615E9933CF967c8AC4EDed7dda6F1D2;
+    address constant USER = 0x333d0EBc54707c0a9D92caC749B3094c28a0E111;
+    address constant FACTORY = 0x251B9B231845A3772b887061dCc1c411F297aeA8;
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
@@ -23,7 +22,6 @@ contract Clone is Script {
     function run() public {
         vm.startBroadcast();
         address clone = deployPlatform();
-
         vm.stopBroadcast();
 
         console2.log("clone:");
@@ -40,6 +38,6 @@ contract Clone is Script {
         managers[0] = OWNER;
         managers[1] = USER;
 
-        return PlatformFactory(FACTORY).create("", publishers, managers, 0);
+        return PlatformFactory(FACTORY).create("", publishers, managers);
     }
 }

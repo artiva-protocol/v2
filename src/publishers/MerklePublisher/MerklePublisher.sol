@@ -5,17 +5,12 @@ import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 import "../../platform/interface/IPlatform.sol";
 import "./interface/IMerklePublisher.sol";
-import "@opengsn/contracts/src/ERC2771Recipient.sol";
 
-contract MerklePublisher is IMerklePublisher, ERC2771Recipient {
+contract MerklePublisher is IMerklePublisher {
     mapping(address => bytes32) public platformToMerkleRoot;
     mapping(address => string) public platformToLeavesURI;
 
     /// > [[[[[[[[[[[ Merkle root functions ]]]]]]]]]]]
-
-    constructor(address forwarder) {
-        _setTrustedForwarder(forwarder);
-    }
 
     function setMerkleRoot(
         address platform,
@@ -25,7 +20,7 @@ contract MerklePublisher is IMerklePublisher, ERC2771Recipient {
         require(
             IAccessControl(platform).hasRole(
                 IPlatform(platform).getDefaultAdminRole(),
-                _msgSender()
+                msg.sender
             ),
             "MerklePublisher: NOT_AUTHORIZED"
         );
@@ -38,10 +33,10 @@ contract MerklePublisher is IMerklePublisher, ERC2771Recipient {
     function publish(
         address platform,
         bytes32[] calldata proof,
-        string calldata contentURI
+        string[] calldata contents
     ) external {
-        _verifyMerkleRoot(_msgSender(), proof, platform);
-        IPlatform(platform).addContent(contentURI, _msgSender());
+        _verifyMerkleRoot(msg.sender, proof, platform);
+        IPlatform(platform).addContents(contents, msg.sender);
     }
 
     /// > [[[[[[[[[[[ Internal functions ]]]]]]]]]]]
