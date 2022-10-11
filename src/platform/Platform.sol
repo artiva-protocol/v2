@@ -33,9 +33,9 @@ contract Platform is AccessControl, IPlatform {
     bytes32 public platformMetadataHash;
 
     /// @notice Mapping of content id to its content data.
-    mapping(uint256 => ContentData) contentIdToContentData;
+    mapping(uint256 => ContentData) public contentIdToContentData;
 
-    /// @notice Private content id for identifying content
+    /// @dev Private content id for identifying content
     uint256 private _currentContentId = 0;
 
     /*//////////////////////////////////////////////////////////////
@@ -83,7 +83,7 @@ contract Platform is AccessControl, IPlatform {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Returns admin role for use in composing contracts.
-    function getDefaultAdminRole() external pure returns (bytes32) {
+    function getDefaultAdminRole() external pure override returns (bytes32) {
         return DEFAULT_ADMIN_ROLE;
     }
 
@@ -131,6 +131,7 @@ contract Platform is AccessControl, IPlatform {
     /// @notice Adds content to the platform.
     function addContents(string[] calldata contents, address owner)
         public
+        override
         onlyRoleMember(CONTENT_PUBLISHER_ROLE, msg.sender)
     {
         uint256 contentId;
@@ -143,6 +144,7 @@ contract Platform is AccessControl, IPlatform {
     /// @notice Sets content at a specific content ID. Useful for deleting or updating content.
     function setContents(SetContentRequest[] calldata contentRequests)
         public
+        override
         onlyRoleMember(CONTENT_PUBLISHER_ROLE, msg.sender)
     {
         for (uint256 i = 0; i < contentRequests.length; i++) {
@@ -168,6 +170,7 @@ contract Platform is AccessControl, IPlatform {
     /// @notice Set the metadata for the platform.
     function setPlatformMetadata(string calldata _platformMetadata)
         external
+        override
         onlyRoleMember(METADATA_MANAGER_ROLE, msg.sender)
     {
         platformMetadataHash = keccak256(abi.encode(_platformMetadata));
@@ -179,7 +182,7 @@ contract Platform is AccessControl, IPlatform {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Sets many AccessControl roles. Useful for clients that want to batch role updates.
-    function setManyRoles(RoleRequest[] calldata requests) public {
+    function setManyRoles(RoleRequest[] calldata requests) public override {
         for (uint256 i = 0; i < requests.length; i++) {
             RoleRequest memory request = requests[i];
             if (request.grant) grantRole(request.role, request.account);
