@@ -18,10 +18,7 @@ contract MerklePublisher is IMerklePublisher {
         string calldata leavesURI
     ) external {
         require(
-            IAccessControl(platform).hasRole(
-                IPlatform(platform).getDefaultAdminRole(),
-                msg.sender
-            ),
+            IPlatform(platform).hasRole(msg.sender, IPlatform.Role.ADMIN),
             "MerklePublisher: NOT_AUTHORIZED"
         );
         platformToMerkleRoot[platform] = merkleRoot;

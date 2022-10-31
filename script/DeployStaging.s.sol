@@ -10,14 +10,6 @@ contract Deploy is Script {
     address constant OWNER = 0xa471C9508Acf13867282f36cfCe5c41D719ab78B;
     address constant USER = 0x04bfb0034F24E424489F566f32D1f57647469f9E;
 
-    bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
-
-    bytes32 public constant CONTENT_PUBLISHER_ROLE =
-        keccak256("CONTENT_PUBLISHER_ROLE");
-
-    bytes32 public constant METADATA_MANAGER_ROLE =
-        keccak256("METADATA_MANAGER_ROLE");
-
     function run() public {
         vm.startBroadcast();
         PlatformFactory factory = new PlatformFactory(OWNER);
@@ -36,15 +28,15 @@ contract Deploy is Script {
     }
 
     function deployPlatform(address factory) internal returns (address) {
-        address[] memory publishers = new address[](2);
-        address[] memory managers = new address[](2);
-
-        publishers[0] = OWNER;
-        publishers[1] = USER;
-
-        managers[0] = OWNER;
-        managers[1] = USER;
-
-        return PlatformFactory(factory).create("", publishers, managers);
+        IPlatform.RoleRequest[] memory roles = new IPlatform.RoleRequest[](2);
+        roles[0] = IPlatform.RoleRequest({
+            role: IPlatform.Role.ADMIN,
+            account: OWNER
+        });
+        roles[1] = IPlatform.RoleRequest({
+            role: IPlatform.Role.MANAGER,
+            account: USER
+        });
+        return PlatformFactory(factory).create("", roles);
     }
 }

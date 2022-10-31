@@ -29,15 +29,16 @@ contract Clone is Script {
     }
 
     function deployPlatform() internal returns (address) {
-        address[] memory publishers = new address[](2);
-        address[] memory managers = new address[](2);
+        IPlatform.RoleRequest[] memory roles = new IPlatform.RoleRequest[](2);
+        roles[0] = IPlatform.RoleRequest({
+            role: IPlatform.Role.ADMIN,
+            account: OWNER
+        });
+        roles[1] = IPlatform.RoleRequest({
+            role: IPlatform.Role.MANAGER,
+            account: USER
+        });
 
-        publishers[0] = OWNER;
-        publishers[1] = USER;
-
-        managers[0] = OWNER;
-        managers[1] = USER;
-
-        return PlatformFactory(FACTORY).create("", publishers, managers);
+        return PlatformFactory(FACTORY).create("", roles);
     }
 }

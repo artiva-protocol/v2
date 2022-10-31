@@ -60,30 +60,26 @@ contract PlatformFactory is Ownable {
 
     /// @notice Deploy a new platform clone with the sender as the owner.
     function create(
-        string calldata platformMetadata,
-        address[] calldata publishers,
-        address[] calldata metadataManagers
+        string calldata metadata,
+        IPlatform.RoleRequest[] calldata roles
     ) external returns (address clone) {
-        clone = _deployCloneAndInitialize(
-            msg.sender,
-            IPlatform.PlatformData({
-                platformMetadata: platformMetadata,
-                publishers: publishers,
-                metadataManagers: metadataManagers
-            })
-        );
+        clone = _deployCloneAndInitialize(metadata, roles);
     }
+
+    /*//////////////////////////////////////////////////////////////
+                            Private functions
+    //////////////////////////////////////////////////////////////*/
 
     /// @dev Deploys a clone and calls the initialize function
     function _deployCloneAndInitialize(
-        address owner,
-        Platform.PlatformData memory platform
+        string memory metadata,
+        IPlatform.RoleRequest[] memory roles
     ) internal returns (address clone) {
         clone = Clones.clone(implementation);
 
         IObservability(o11y).emitDeploymentEvent(owner, clone);
 
         // Initialize clone.
-        Platform(clone).initialize(owner, platform);
+        Platform(clone).initialize(metadata, roles);
     }
 }

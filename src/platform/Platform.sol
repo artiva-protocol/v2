@@ -3,11 +3,10 @@ pragma solidity ^0.8.13;
 
 import "./interface/IPlatform.sol";
 import "../observability/interface/IObservability.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-contract Platform is AccessControl, IPlatform {
+contract Platform is IPlatform {
     /*//////////////////////////////////////////////////////////////
                             Version
     //////////////////////////////////////////////////////////////*/
@@ -30,7 +29,7 @@ contract Platform is AccessControl, IPlatform {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Hash of the platform metadata
-    bytes32 public platformMetadataHash;
+    bytes32 public metadataHash;
 
     /// @notice Mapping of content id to its content data.
     mapping(uint256 => ContentData) public contentIdToContentData;
@@ -42,21 +41,15 @@ contract Platform is AccessControl, IPlatform {
                             Platform Roles
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Content publisher role hash for AccessControl
-    bytes32 public immutable override CONTENT_PUBLISHER_ROLE =
-        keccak256("CONTENT_PUBLISHER_ROLE");
-
-    /// @notice Metadata manager role hash for AccessControl
-    bytes32 public immutable override METADATA_MANAGER_ROLE =
-        keccak256("METADATA_MANAGER_ROLE");
+    mapping(address => Role) public accountToRole;
 
     /*//////////////////////////////////////////////////////////////
                             Modifiers
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Checks if member is in role.
-    modifier onlyRoleMember(bytes32 role, address member) {
-        require(hasRole(role, member), "UNAUTHORIZED_ACCOUNT");
+    modifier onlyRoleMemberOrGreater(Role role, address member) {
+        if (accountToRole[member] < role) revert Unauthorized();
         _;
     }
 
@@ -66,25 +59,16 @@ contract Platform is AccessControl, IPlatform {
 
     constructor(address _factory, address _o11y) {
         // Assert not the zero-address.
-        require(_factory != address(0), "MUST_SET_FACTORY");
+        if (_factory == address(0)) revert MustSetFactory();
 
         // Store factory.
         factory = _factory;
 
         // Assert not the zero-address.
-        require(_o11y != address(0), "MUST_SET_OBSERVABILITY");
+        if (_o11y == address(0)) revert MustSetObservability();
 
         // Store observability.
         o11y = _o11y;
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            View Methods
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Returns admin role for use in composing contracts.
-    function getDefaultAdminRole() external pure override returns (bytes32) {
-        return DEFAULT_ADMIN_ROLE;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -92,36 +76,39 @@ contract Platform is AccessControl, IPlatform {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Sets default platform data must be called by factory contract.
-    function initialize(address owner, PlatformData memory platform) external {
-        require(msg.sender == factory, "NOT_FACTORY");
+    function initialize(string memory metadata, RoleRequest[] memory roles)
+        external
+    {
+        if (msg.sender != factory) revert CallerNotFactory();
 
         /// > [[[[[[[[[[[ Roles ]]]]]]]]]]]
+        for (uint256 i = 0; i < roles.length; i++) {
+            _setRole(roles[i].account, roles[i].role);
 
-        _setupRole(DEFAULT_ADMIN_ROLE, owner);
-        IObservability(o11y).emitRoleSet(owner, DEFAULT_ADMIN_ROLE, true);
-
-        for (uint256 i; i < platform.publishers.length; i++) {
-            _setupRole(CONTENT_PUBLISHER_ROLE, platform.publishers[i]);
             IObservability(o11y).emitRoleSet(
-                platform.publishers[i],
-                CONTENT_PUBLISHER_ROLE,
-                true
-            );
-        }
-
-        for (uint256 i; i < platform.metadataManagers.length; i++) {
-            _setupRole(METADATA_MANAGER_ROLE, platform.metadataManagers[i]);
-            IObservability(o11y).emitRoleSet(
-                platform.metadataManagers[i],
-                METADATA_MANAGER_ROLE,
-                true
+                roles[i].account,
+                uint8(roles[i].role)
             );
         }
 
         /// > [[[[[[[[[[[ Platform metadata ]]]]]]]]]]]
 
-        platformMetadataHash = keccak256(abi.encode(platform.platformMetadata));
-        IObservability(o11y).emitPlatformMetadataSet(platform.platformMetadata);
+        metadataHash = keccak256(abi.encode(metadata));
+        IObservability(o11y).emitPlatformMetadataSet(metadata);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            View Methods
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Check if account has a specific role.
+    function hasRole(address account, Role role) public view returns (bool) {
+        return accountToRole[account] == role;
+    }
+
+    /// @notice Check if account has access at or above a specific role.
+    function hasAccess(address account, Role role) public view returns (bool) {
+        return accountToRole[account] >= role;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -132,7 +119,7 @@ contract Platform is AccessControl, IPlatform {
     function addContents(string[] calldata contents, address owner)
         public
         override
-        onlyRoleMember(CONTENT_PUBLISHER_ROLE, msg.sender)
+        onlyRoleMemberOrGreater(Role.PUBLISHER, msg.sender)
     {
         uint256 contentId;
         for (uint256 i = 0; i < contents.length; i++) {
@@ -145,14 +132,14 @@ contract Platform is AccessControl, IPlatform {
     function setContents(SetContentRequest[] calldata contentRequests)
         public
         override
-        onlyRoleMember(CONTENT_PUBLISHER_ROLE, msg.sender)
+        onlyRoleMemberOrGreater(Role.PUBLISHER, msg.sender)
     {
         for (uint256 i = 0; i < contentRequests.length; i++) {
             uint256 contentId = contentRequests[i].contentId;
 
             address owner = contentIdToContentData[contentId].owner;
-            require(owner != address(0), "NO_OWNER");
-            require(owner == msg.sender, "SENDER_NOT_OWNER");
+            if (owner == address(0)) revert ContentNotSet();
+            if (owner != msg.sender) revert SenderNotContentOwner();
 
             _setContent(contentId, contentRequests[i].content);
             IObservability(o11y).emitContentSet(
@@ -163,6 +150,16 @@ contract Platform is AccessControl, IPlatform {
         }
     }
 
+    /// @notice Adds content to the platform.
+    function removeContent(uint256 contentId) public override {
+        address owner = contentIdToContentData[contentId].owner;
+        if (owner == address(0)) revert ContentNotSet();
+        if (owner != msg.sender) revert SenderNotContentOwner();
+
+        delete contentIdToContentData[contentId];
+        IObservability(o11y).emitContentRemoved(contentId);
+    }
+
     /*//////////////////////////////////////////////////////////////
                             Metadata Methods
     //////////////////////////////////////////////////////////////*/
@@ -171,9 +168,9 @@ contract Platform is AccessControl, IPlatform {
     function setPlatformMetadata(string calldata _platformMetadata)
         external
         override
-        onlyRoleMember(METADATA_MANAGER_ROLE, msg.sender)
+        onlyRoleMemberOrGreater(Role.MANAGER, msg.sender)
     {
-        platformMetadataHash = keccak256(abi.encode(_platformMetadata));
+        metadataHash = keccak256(abi.encode(_platformMetadata));
         IObservability(o11y).emitPlatformMetadataSet(_platformMetadata);
     }
 
@@ -181,19 +178,36 @@ contract Platform is AccessControl, IPlatform {
                             Role Methods
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Sets many AccessControl roles. Useful for clients that want to batch role updates.
-    function setManyRoles(RoleRequest[] calldata requests) public override {
+    /// @notice Sets the role for the given account.
+    function setRole(address account, Role role)
+        public
+        override
+        onlyRoleMemberOrGreater(Role.ADMIN, msg.sender)
+    {
+        _setRole(account, role);
+        IObservability(o11y).emitRoleSet(account, uint8(role));
+    }
+
+    /// @notice Sets many roles.
+    function setManyRoles(RoleRequest[] calldata requests)
+        public
+        override
+        onlyRoleMemberOrGreater(Role.ADMIN, msg.sender)
+    {
         for (uint256 i = 0; i < requests.length; i++) {
-            RoleRequest memory request = requests[i];
-            if (request.grant) grantRole(request.role, request.account);
-            else revokeRole(request.role, request.account);
+            _setRole(requests[i].account, requests[i].role);
 
             IObservability(o11y).emitRoleSet(
-                request.account,
-                request.role,
-                request.grant
+                requests[i].account,
+                uint8(requests[i].role)
             );
         }
+    }
+
+    /// @notice Renounces the role for sender.
+    function renounceRole() public override {
+        _setRole(msg.sender, Role.UNAUTHORIZED);
+        IObservability(o11y).emitRoleSet(msg.sender, uint8(Role.UNAUTHORIZED));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -221,56 +235,8 @@ contract Platform is AccessControl, IPlatform {
         );
     }
 
-    /*//////////////////////////////////////////////////////////////
-                            Ovverides
-    //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @dev Grants `role` to `account`. Overridden to support observability.
-     */
-    function grantRole(bytes32 role, address account)
-        public
-        virtual
-        override(AccessControl)
-        onlyRole(getRoleAdmin(role))
-    {
-        _grantRole(role, account);
-
-        //Overridden to support observability
-        IObservability(o11y).emitRoleSet(account, role, true);
-    }
-
-    /**
-     * @dev Revokes `role` from `account`. Overridden to support observability.
-     */
-    function revokeRole(bytes32 role, address account)
-        public
-        virtual
-        override(AccessControl)
-        onlyRole(getRoleAdmin(role))
-    {
-        _revokeRole(role, account);
-
-        //Overridden to support observability
-        IObservability(o11y).emitRoleSet(account, role, false);
-    }
-
-    /**
-     * @dev Revokes `role` from the calling account. Overridden to support observability.
-     */
-    function renounceRole(bytes32 role, address account)
-        public
-        virtual
-        override(AccessControl)
-    {
-        require(
-            account == _msgSender(),
-            "AccessControl: can only renounce roles for self"
-        );
-
-        _revokeRole(role, account);
-
-        //Overridden to support observability
-        IObservability(o11y).emitRoleSet(account, role, false);
+    /// @notice Sets the role for a given account.
+    function _setRole(address account, Role role) internal {
+        accountToRole[account] = role;
     }
 }

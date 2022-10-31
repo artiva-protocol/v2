@@ -25,13 +25,14 @@ interface IObservabilityEvents {
         address indexed owner
     );
 
+    event ContentRemoved(address indexed clone, uint256 indexed contentId);
+
     event PlatformMetadataSet(address indexed clone, string metadata);
 
     event RoleSet(
         address indexed clone,
         address indexed account,
-        bytes32 indexed role,
-        bool granted
+        uint8 indexed role
     );
 }
 
@@ -49,11 +50,9 @@ interface IObservability {
         address owner
     ) external;
 
+    function emitContentRemoved(uint256 contentId) external;
+
     function emitPlatformMetadataSet(string calldata metadata) external;
 
-    function emitRoleSet(
-        address account,
-        bytes32 role,
-        bool granted
-    ) external;
+    function emitRoleSet(address account, uint8 role) external;
 }

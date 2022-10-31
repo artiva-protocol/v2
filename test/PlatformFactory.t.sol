@@ -34,9 +34,7 @@ contract PlatformTest is Test {
     }
 
     function createPlatform() internal {
-        address[] memory publishers = new address[](1);
-        address[] memory managers = new address[](1);
-
-        factory.create("", publishers, managers);
+        IPlatform.RoleRequest[] memory roles = new IPlatform.RoleRequest[](1);
+        factory.create("", roles);
     }
 }

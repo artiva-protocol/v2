@@ -8,32 +8,19 @@ import "@opengsn/contracts/src/forwarder/Forwarder.sol";
 
 contract PlatformTest is Test {
     Platform public platform;
+
     address factory = address(1);
-
-    address owner;
-    uint256 internal ownerPrivateKey;
-
-    address unauthorizedAccount;
-    uint256 internal unauthorizedAccountPrivateKey;
-
-    address fowarder;
+    address owner = address(2);
     address publisher = address(3);
     address otherPublisher = address(4);
     address metadataManager = address(5);
     address otherMetadataManager = address(6);
+    address unauthorizedAccount = address(7);
 
     string sampleContent = "http://testcontent.com/post/1";
 
     function setUp() public {
         address o11y = address(new Observability());
-        fowarder = address(new Forwarder());
-
-        ownerPrivateKey = 0xA11CE;
-        owner = vm.addr(ownerPrivateKey);
-
-        unauthorizedAccountPrivateKey = 0xF11CE;
-        unauthorizedAccount = vm.addr(unauthorizedAccountPrivateKey);
-
         platform = new Platform(factory, o11y);
     }
 
@@ -44,8 +31,12 @@ contract PlatformTest is Test {
     }
 
     function testRevert_InitlizerNotFactory() public {
-        vm.expectRevert("NOT_FACTORY");
-        platform.initialize(owner, getInitalPlatformData());
+        vm.expectRevert(IPlatform.CallerNotFactory.selector);
+        (
+            string memory metadata,
+            IPlatform.RoleRequest[] memory roles
+        ) = getInitalPlatformData();
+        platform.initialize(metadata, roles);
     }
 
     /// > [[[[[[[[[[[ Content Methods ]]]]]]]]]]]
@@ -64,7 +55,7 @@ contract PlatformTest is Test {
         initialize();
 
         vm.startPrank(owner);
-        platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
+        platform.setRole(publisher, IPlatform.Role.PUBLISHER);
         vm.stopPrank();
 
         string[] memory content = new string[](1);
@@ -108,7 +99,7 @@ contract PlatformTest is Test {
         });
 
         vm.startPrank(owner);
-        platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
+        platform.setRole(publisher, IPlatform.Role.PUBLISHER);
         vm.stopPrank();
 
         vm.startPrank(publisher);
@@ -131,7 +122,7 @@ contract PlatformTest is Test {
         });
 
         vm.startPrank(owner);
-        platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
+        platform.setRole(publisher, IPlatform.Role.PUBLISHER);
         platform.addContents(content, publisher);
         vm.stopPrank();
 
@@ -145,7 +136,7 @@ contract PlatformTest is Test {
         string[] memory content = new string[](1);
         content[0] = sampleContent;
 
-        vm.expectRevert("UNAUTHORIZED_ACCOUNT");
+        vm.expectRevert(IPlatform.Unauthorized.selector);
         platform.addContents(content, owner);
     }
 
@@ -159,7 +150,7 @@ contract PlatformTest is Test {
             content: sampleContent
         });
 
-        vm.expectRevert("UNAUTHORIZED_ACCOUNT");
+        vm.expectRevert(IPlatform.Unauthorized.selector);
         platform.setContents(reqs);
     }
 
@@ -173,7 +164,7 @@ contract PlatformTest is Test {
             content: sampleContent
         });
 
-        vm.expectRevert("NO_OWNER");
+        vm.expectRevert(IPlatform.ContentNotSet.selector);
         vm.prank(owner);
         platform.setContents(reqs);
     }
@@ -192,13 +183,67 @@ contract PlatformTest is Test {
         });
 
         vm.startPrank(owner);
-        platform.grantRole(platform.CONTENT_PUBLISHER_ROLE(), publisher);
+        platform.setRole(publisher, IPlatform.Role.PUBLISHER);
         platform.addContents(content, owner);
         vm.stopPrank();
 
-        vm.expectRevert("SENDER_NOT_OWNER");
+        vm.expectRevert(IPlatform.SenderNotContentOwner.selector);
         vm.prank(publisher);
         platform.setContents(reqs);
+    }
+
+    function test_RemoveContentOwner() public {
+        initialize();
+
+        string[] memory content = new string[](1);
+        content[0] = sampleContent;
+
+        vm.startPrank(owner);
+        platform.addContents(content, owner);
+        platform.removeContent(0);
+        vm.stopPrank();
+    }
+
+    function test_RemoveContentPublisher() public {
+        initialize();
+
+        string[] memory content = new string[](1);
+        content[0] = sampleContent;
+
+        vm.prank(owner);
+        platform.setRole(publisher, IPlatform.Role.PUBLISHER);
+
+        vm.startPrank(publisher);
+        platform.addContents(content, publisher);
+        platform.removeContent(0);
+        vm.stopPrank();
+    }
+
+    function test_RemoveContentNoRole() public {
+        initialize();
+
+        string[] memory content = new string[](1);
+        content[0] = sampleContent;
+
+        vm.prank(owner);
+        platform.addContents(content, unauthorizedAccount);
+
+        vm.prank(unauthorizedAccount);
+        platform.removeContent(0);
+    }
+
+    function testRevert_RemoveContentSenderNotOwner() public {
+        initialize();
+
+        string[] memory content = new string[](1);
+        content[0] = sampleContent;
+
+        vm.prank(owner);
+        platform.addContents(content, owner);
+
+        vm.prank(unauthorizedAccount);
+        vm.expectRevert(IPlatform.SenderNotContentOwner.selector);
+        platform.removeContent(0);
     }
 
     /// > [[[[[[[[[[[ Platform Metadata Methods ]]]]]]]]]]]
@@ -214,7 +259,7 @@ contract PlatformTest is Test {
         initialize();
 
         vm.startPrank(owner);
-        platform.grantRole(platform.METADATA_MANAGER_ROLE(), metadataManager);
+        platform.setRole(metadataManager, IPlatform.Role.MANAGER);
         vm.stopPrank();
 
         vm.startPrank(metadataManager);
@@ -225,11 +270,40 @@ contract PlatformTest is Test {
     function testRevert_SetPlatformMetadataNotAuthorized() public {
         initialize();
         vm.prank(unauthorizedAccount);
-        vm.expectRevert("UNAUTHORIZED_ACCOUNT");
+        vm.expectRevert(IPlatform.Unauthorized.selector);
         platform.setPlatformMetadata(sampleContent);
     }
 
     /// > [[[[[[[[[[[ Role Methods ]]]]]]]]]]]
+
+    function test_SetRole() public {
+        initialize();
+
+        vm.prank(owner);
+        platform.setRole(otherPublisher, IPlatform.Role.PUBLISHER);
+
+        require(platform.hasRole(otherPublisher, IPlatform.Role.PUBLISHER));
+    }
+
+    function testRevert_SetRoleUnathorized() public {
+        initialize();
+
+        vm.prank(unauthorizedAccount);
+        vm.expectRevert(IPlatform.Unauthorized.selector);
+        platform.setRole(otherPublisher, IPlatform.Role.PUBLISHER);
+    }
+
+    function test_RenounceRole() public {
+        initialize();
+
+        vm.prank(owner);
+        platform.setRole(otherPublisher, IPlatform.Role.PUBLISHER);
+
+        vm.prank(otherPublisher);
+        platform.renounceRole();
+
+        require(platform.hasRole(otherPublisher, IPlatform.Role.UNAUTHORIZED));
+    }
 
     function test_SetManyRoles() public {
         initialize();
@@ -238,74 +312,86 @@ contract PlatformTest is Test {
 
         roles[0] = IPlatform.RoleRequest({
             account: otherPublisher,
-            role: platform.CONTENT_PUBLISHER_ROLE(),
-            grant: true
+            role: IPlatform.Role.PUBLISHER
         });
 
         roles[1] = IPlatform.RoleRequest({
             account: otherMetadataManager,
-            role: platform.METADATA_MANAGER_ROLE(),
-            grant: true
+            role: IPlatform.Role.MANAGER
         });
 
         roles[2] = IPlatform.RoleRequest({
             account: publisher,
-            role: platform.CONTENT_PUBLISHER_ROLE(),
-            grant: false
+            role: IPlatform.Role.UNAUTHORIZED
         });
 
         roles[3] = IPlatform.RoleRequest({
             account: metadataManager,
-            role: platform.METADATA_MANAGER_ROLE(),
-            grant: false
+            role: IPlatform.Role.UNAUTHORIZED
         });
 
         vm.prank(owner);
         platform.setManyRoles(roles);
 
-        require(
-            platform.hasRole(platform.CONTENT_PUBLISHER_ROLE(), otherPublisher)
-        );
+        require(platform.hasRole(otherPublisher, IPlatform.Role.PUBLISHER));
+        require(platform.hasRole(otherMetadataManager, IPlatform.Role.MANAGER));
 
-        require(
-            platform.hasRole(
-                platform.METADATA_MANAGER_ROLE(),
-                otherMetadataManager
-            )
-        );
+        require(platform.hasRole(publisher, IPlatform.Role.UNAUTHORIZED));
+        require(platform.hasRole(metadataManager, IPlatform.Role.UNAUTHORIZED));
+    }
 
-        require(
-            !platform.hasRole(platform.CONTENT_PUBLISHER_ROLE(), publisher)
-        );
+    function testRevert_SetManyRolesUnauthorized() public {
+        initialize();
 
-        require(
-            !platform.hasRole(platform.METADATA_MANAGER_ROLE(), metadataManager)
-        );
+        IPlatform.RoleRequest[] memory roles = new IPlatform.RoleRequest[](4);
+
+        roles[0] = IPlatform.RoleRequest({
+            account: otherPublisher,
+            role: IPlatform.Role.PUBLISHER
+        });
+
+        roles[1] = IPlatform.RoleRequest({
+            account: otherMetadataManager,
+            role: IPlatform.Role.MANAGER
+        });
+
+        roles[2] = IPlatform.RoleRequest({
+            account: publisher,
+            role: IPlatform.Role.UNAUTHORIZED
+        });
+
+        roles[3] = IPlatform.RoleRequest({
+            account: metadataManager,
+            role: IPlatform.Role.UNAUTHORIZED
+        });
+
+        vm.prank(unauthorizedAccount);
+        vm.expectRevert(IPlatform.Unauthorized.selector);
+        platform.setManyRoles(roles);
     }
 
     /// > [[[[[[[[[[[ Internal Functions ]]]]]]]]]]]
 
     function initialize() internal {
         vm.prank(factory);
-        platform.initialize(owner, getInitalPlatformData());
+        (
+            string memory metadata,
+            IPlatform.RoleRequest[] memory roles
+        ) = getInitalPlatformData();
+        platform.initialize(metadata, roles);
     }
 
     function getInitalPlatformData()
         internal
         view
-        returns (IPlatform.PlatformData memory)
+        returns (string memory metadata, IPlatform.RoleRequest[] memory roles)
     {
-        address[] memory publishers = new address[](1);
-        publishers[0] = owner;
+        roles = new IPlatform.RoleRequest[](2);
+        roles[0] = IPlatform.RoleRequest({
+            role: IPlatform.Role.ADMIN,
+            account: owner
+        });
 
-        address[] memory managers = new address[](1);
-        managers[0] = owner;
-
-        return
-            IPlatform.PlatformData({
-                platformMetadata: sampleContent,
-                publishers: publishers,
-                metadataManagers: managers
-            });
+        return (sampleContent, roles);
     }
 }

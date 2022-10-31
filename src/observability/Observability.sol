@@ -34,6 +34,10 @@ contract Observability is IObservability, IObservabilityEvents {
         emit ContentSet(msg.sender, contentId, content, owner);
     }
 
+    function emitContentRemoved(uint256 contentId) external override {
+        emit ContentRemoved(msg.sender, contentId);
+    }
+
     function emitPlatformMetadataSet(string calldata metadata)
         external
         override
@@ -41,11 +45,7 @@ contract Observability is IObservability, IObservabilityEvents {
         emit PlatformMetadataSet(msg.sender, metadata);
     }
 
-    function emitRoleSet(
-        address account,
-        bytes32 role,
-        bool granted
-    ) external override {
-        emit RoleSet(msg.sender, account, role, granted);
+    function emitRoleSet(address account, uint8 role) external override {
+        emit RoleSet(msg.sender, account, role);
     }
 }
